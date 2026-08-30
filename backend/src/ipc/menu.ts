@@ -1,6 +1,8 @@
 /* eslint-disable */
 import { ipcMain, dialog, app } from 'electron';
 import { getDB } from '../db';
+import { assertCurrentPermission } from '../services/authz';
+import { fromMinorUnits, toMinorUnits } from '../services/money';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -24,6 +26,7 @@ interface MenuItemRow {
   category_id: number;
   name: string;
   price: number;
+  price_minor?: number | null;
   cgst_rate: number;
   sgst_rate: number;
   hsn_code: string | null;
@@ -98,6 +101,7 @@ interface UpdateRecipePayload {
 export function registerMenuIPC() {
   ipcMain.handle('menu:getMenus', async () => {
     try {
+      assertCurrentPermission('menu_viewing');
       const db = getDB();
       const menus = db.prepare('SELECT * FROM menus ORDER BY created_at ASC').all() as MenuRow[];
       return { success: true, data: menus };
@@ -109,6 +113,7 @@ export function registerMenuIPC() {
 
   ipcMain.handle('menu:upsertMenu', async (_, payload: UpsertMenuPayload) => {
     try {
+      assertCurrentPermission(payload.id ? 'menu_editing' : 'menu_creation');
       const db = getDB();
       if (payload.id) {
         db.prepare('UPDATE menus SET name = ?, is_active = ?, auto_enable_time = ?, auto_disable_time = ?, schedule_enabled = ? WHERE id = ?')
@@ -134,6 +139,7 @@ export function registerMenuIPC() {
 
   ipcMain.handle('menu:duplicateMenu', async (_, payload: { id: number, newName: string }) => {
     try {
+      assertCurrentPermission('menu_creation');
       const db = getDB();
       const transaction = db.transaction((sourceMenuId: number, name: string) => {
         // Create new menu
@@ -151,9 +157,9 @@ export function registerMenuIPC() {
           const sourceItems = db.prepare('SELECT * FROM menu_items WHERE category_id = ?').all(cat.id) as MenuItemRow[];
           for (const item of sourceItems) {
             const newItem = db.prepare(`
-              INSERT INTO menu_items (category_id, name, price, cgst_rate, sgst_rate, hsn_code, is_veg, is_available, sort_order, image_url, tax_name, tax_rate, tax_mode, dietary_label)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(newCatId, item.name, item.price, item.cgst_rate ?? 0, item.sgst_rate ?? 0, item.hsn_code, item.is_veg, item.is_available, item.sort_order, item.image_url, item.tax_name ?? null, item.tax_rate ?? 0, item.tax_mode ?? 'exclusive', item.dietary_label ?? null);
+              INSERT INTO menu_items (category_id, name, price, price_minor, cgst_rate, sgst_rate, hsn_code, is_veg, is_available, sort_order, image_url, tax_name, tax_rate, tax_mode, dietary_label)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(newCatId, item.name, fromMinorUnits(item.price_minor ?? toMinorUnits(item.price)), fromMinorUnits(item.price_minor ?? toMinorUnits(item.price)), item.cgst_rate ?? 0, item.sgst_rate ?? 0, item.hsn_code, item.is_veg, item.is_available, item.sort_order, item.image_url, item.tax_name ?? null, item.tax_rate ?? 0, item.tax_mode ?? 'exclusive', item.dietary_label ?? null);
             const newItemId = newItem.lastInsertRowid;
             
             // Clone recipes
@@ -177,6 +183,7 @@ export function registerMenuIPC() {
 
   ipcMain.handle('menu:uploadImage', async () => {
     try {
+      assertCurrentPermission('menu_editing');
       const { canceled, filePaths } = await dialog.showOpenDialog({
         title: 'Select Dish Image',
         properties: ['openFile'],
@@ -211,6 +218,7 @@ export function registerMenuIPC() {
 
   ipcMain.handle('menu:getAll', async (_, menuId?: number) => {
     try {
+      assertCurrentPermission('menu_viewing');
       const db = getDB();
       let targetMenuId = menuId;
       if (!targetMenuId) {
@@ -226,7 +234,7 @@ export function registerMenuIPC() {
       if (categories.length === 0) {return { success: true, data: [] };}
 
       const catIds = categories.map(c => c.id).join(',');
-      const items = db.prepare(`SELECT * FROM menu_items WHERE category_id IN (${catIds}) ORDER BY sort_order ASC`).all() as MenuItemRow[];
+      const items = db.prepare(`SELECT * FROM menu_items WHERE category_id IN (${catIds}) AND is_active = 1 ORDER BY sort_order ASC`).all() as MenuItemRow[];
       
       const mappedCategories = categories.map(cat => ({
         ...cat,
@@ -244,6 +252,7 @@ export function registerMenuIPC() {
 
   ipcMain.handle('menu:upsertCategory', async (_, payload: UpsertCategoryPayload) => {
     try {
+      assertCurrentPermission('category_management');
       const db = getDB();
       if (payload.id) {
         db.prepare('UPDATE categories SET name = ?, sort_order = ? WHERE id = ?')
@@ -262,6 +271,7 @@ export function registerMenuIPC() {
 
   ipcMain.handle('menu:deleteCategory', async (_, payload: DeleteCategoryPayload) => {
     try {
+      assertCurrentPermission('menu_deactivation');
       const db = getDB();
       db.prepare('UPDATE categories SET is_active = 0 WHERE id = ?').run(payload.id);
       return { success: true };
@@ -273,15 +283,18 @@ export function registerMenuIPC() {
 
   ipcMain.handle('menu:upsertItem', async (_, payload: UpsertItemPayload) => {
     try {
+      assertCurrentPermission(payload.id ? 'menu_editing' : 'menu_creation');
       const db = getDB();
+      const priceMinor = toMinorUnits(payload.price);
+      const price = fromMinorUnits(priceMinor);
       if (payload.id) {
         const stmt = db.prepare(`
-          UPDATE menu_items 
-          SET category_id = ?, name = ?, price = ?, cgst_rate = ?, sgst_rate = ?, hsn_code = ?, is_veg = ?, sort_order = ?, is_available = ?, image_url = ?, tax_name = ?, tax_rate = ?, tax_mode = ?, dietary_label = ?
+          UPDATE menu_items
+          SET category_id = ?, name = ?, price = ?, price_minor = ?, cgst_rate = ?, sgst_rate = ?, hsn_code = ?, is_veg = ?, sort_order = ?, is_available = ?, image_url = ?, tax_name = ?, tax_rate = ?, tax_mode = ?, dietary_label = ?, updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
         `);
         stmt.run(
-          payload.category_id, payload.name, payload.price, payload.cgst_rate ?? 0, payload.sgst_rate ?? 0, 
+          payload.category_id, payload.name, price, priceMinor, payload.cgst_rate ?? 0, payload.sgst_rate ?? 0,
           payload.hsn_code ?? null, payload.is_veg ?? 1, payload.sort_order ?? 0, payload.is_available ?? 1, payload.image_url ?? null,
           payload.tax_name ?? null, payload.tax_rate ?? 0, payload.tax_mode ?? 'exclusive', payload.dietary_label ?? null,
           payload.id
@@ -289,11 +302,11 @@ export function registerMenuIPC() {
         return { success: true, data: { id: payload.id } };
       } 
       const stmt = db.prepare(`
-        INSERT INTO menu_items (category_id, name, price, cgst_rate, sgst_rate, hsn_code, is_veg, sort_order, is_available, image_url, tax_name, tax_rate, tax_mode, dietary_label)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO menu_items (category_id, name, price, price_minor, cgst_rate, sgst_rate, hsn_code, is_veg, sort_order, is_available, image_url, tax_name, tax_rate, tax_mode, dietary_label)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       const result = stmt.run(
-        payload.category_id, payload.name, payload.price, payload.cgst_rate ?? 0, payload.sgst_rate ?? 0, 
+        payload.category_id, payload.name, price, priceMinor, payload.cgst_rate ?? 0, payload.sgst_rate ?? 0,
         payload.hsn_code ?? null, payload.is_veg ?? 1, payload.sort_order ?? 0, payload.is_available ?? 1, payload.image_url ?? null,
         payload.tax_name ?? null, payload.tax_rate ?? 0, payload.tax_mode ?? 'exclusive', payload.dietary_label ?? null
       );
@@ -307,8 +320,9 @@ export function registerMenuIPC() {
 
   ipcMain.handle('menu:deleteItem', async (_, payload: DeleteItemPayload) => {
     try {
+      assertCurrentPermission('menu_deactivation');
       const db = getDB();
-      db.prepare('DELETE FROM menu_items WHERE id = ?').run(payload.id);
+      db.prepare('UPDATE menu_items SET is_active = 0, is_available = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(payload.id);
       return { success: true };
     } catch (e: unknown) {
       if (e instanceof Error) { return { success: false, error: e.message }; }
@@ -318,6 +332,7 @@ export function registerMenuIPC() {
 
   ipcMain.handle('menu:toggleAvailable', async (_, payload: ToggleAvailablePayload) => {
     try {
+      assertCurrentPermission('menu_editing');
       const db = getDB();
       db.prepare('UPDATE menu_items SET is_available = ? WHERE id = ?').run(payload.is_available, payload.id);
       return { success: true };
@@ -329,6 +344,7 @@ export function registerMenuIPC() {
 
   ipcMain.handle('menu:getRecipe', async (_, payload: { menu_item_id: number }) => {
     try {
+      assertCurrentPermission('menu_viewing');
       const db = getDB();
       const recipe = db.prepare(`
         SELECT m.inventory_item_id, m.qty_used, i.name, i.unit 
@@ -345,6 +361,7 @@ export function registerMenuIPC() {
 
   ipcMain.handle('menu:updateRecipe', async (_, payload: UpdateRecipePayload) => {
     try {
+      assertCurrentPermission('menu_editing');
       const db = getDB();
       const transaction = db.transaction((menu_item_id: number, ingredients: RecipeItemPayload[]) => {
         db.prepare('DELETE FROM menu_inventory_map WHERE menu_item_id = ?').run(menu_item_id);
