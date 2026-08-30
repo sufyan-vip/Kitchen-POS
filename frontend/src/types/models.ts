@@ -198,38 +198,118 @@ export interface OrderItem {
   name: string;
   qty: number;
   unit_price: number;
+  unit_price_minor?: number | null;
+  discount: number;
+  discount_minor?: number | null;
+  tax_name?: string | null;
+  tax_rate?: number | null;
+  tax_mode?: 'exclusive' | 'inclusive' | null;
   cgst_rate: number;
   sgst_rate: number;
   hsn_code: string | null;
-  discount: number;
   kot_printed: number;
   note: string | null;
   preparation_status: 'pending' | 'preparing' | 'ready' | 'served';
-  kot_number?: number;
+  kot_number?: number | null;
+  variant_id?: number | null;
+  variant_name?: string | null;
+  modifier_snapshot?: string | null;
+  line_total_minor?: number | null;
   prepared_at?: string | null;
   served_at?: string | null;
+  created_at?: string | null;
+}
+
+/** One cart line sent to the backend for authoritative pricing. */
+export interface OrderLineInput {
+  menu_item_id: number;
+  qty: number;
+  variant_id?: number | null;
+  modifiers?: { id: number; qty: number }[];
+  note?: string | null;
+}
+
+export interface SendKOTResultItem {
+  order_item_id: number;
+  name: string;
+  qty: number;
+  variant_name: string | null;
+  modifier_snapshot: string | null;
+  note: string | null;
+  line_total_minor: number;
+}
+
+export interface SendKOTResult {
+  kotId: number;
+  kotNumber: number;
+  orderId: number;
+  orderNumber: string;
+  kotType: 'MAIN' | 'ADDITIONAL';
+  items: SendKOTResultItem[];
 }
 
 export interface KDSTicketItem {
   id: number;
-  menu_item_id: number;
   name: string;
   qty: number;
   note: string | null;
+  variant_name: string | null;
+  modifier_snapshot: string | null;
   preparation_status: 'pending' | 'preparing' | 'ready' | 'served';
   prepared_at: string | null;
   served_at: string | null;
 }
 
 export interface KDSTicket {
+  kot_id: number;
+  kot_number: number;
+  kot_type: 'MAIN' | 'ADDITIONAL';
+  kot_status: string;
+  kot_created_at: string;
   order_id: number;
-  table_id: number;
-  table_name: string;
+  order_number: string;
+  order_status: string;
+  order_kds_status: 'NEW' | 'PREPARING' | 'READY' | 'COMPLETED' | 'CANCELLED';
+  table_id: number | null;
+  table_name: string | null;
   order_note: string | null;
   type: 'dine-in' | 'takeaway' | 'delivery';
   created_at: string;
-  updated_at: string;
   items: KDSTicketItem[];
+}
+
+export interface Supplier {
+  id: number;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  notes: string | null;
+  is_active: number;
+}
+
+export interface Purchase {
+  id: number;
+  purchase_number: string;
+  supplier_id: number;
+  supplier_name?: string | null;
+  status: 'ORDERED' | 'RECEIVED' | 'CANCELLED';
+  total_minor: number;
+  note: string | null;
+  created_at: string;
+  received_at: string | null;
+}
+
+export interface PurchaseItem {
+  id: number;
+  purchase_id: number;
+  inventory_item_id: number;
+  item_name?: string;
+  unit?: string;
+  qty: number;
+  received_qty: number | null;
+  unit_cost_minor: number;
+  line_total_minor: number;
 }
 
 export interface Shift {

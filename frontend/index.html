@@ -5,35 +5,6 @@
     <!-- Removed viewport meta tag to disable responsiveness for desktop app -->
     <!-- Defer non-critical resources - load after page is interactive -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <!-- Manifest is deferred to avoid blocking critical rendering path -->
-    <script>
-      // Load manifest asynchronously after page is interactive
-      (function() {
-        function loadManifest() {
-          const link = document.createElement('link');
-          link.rel = 'manifest';
-          link.href = '/manifest.webmanifest';
-          document.head.appendChild(link);
-        }
-        // Wait for page to be interactive before loading manifest
-        if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', function() {
-            // Defer further to avoid blocking - use requestIdleCallback if available
-            if (window.requestIdleCallback) {
-              window.requestIdleCallback(loadManifest, { timeout: 2000 });
-            } else {
-              setTimeout(loadManifest, 100);
-            }
-          });
-        } else {
-          if (window.requestIdleCallback) {
-            window.requestIdleCallback(loadManifest, { timeout: 2000 });
-          } else {
-            setTimeout(loadManifest, 100);
-          }
-        }
-      })();
-    </script>
     
     <!-- SEO Meta Tags -->
     <title>Restaurant POS</title>

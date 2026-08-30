@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/auth';
+import { hasPermission, Permission } from './lib/permissions';
 
 import LoginPage from './pages/Login';
 import DashboardPage from './pages/Dashboard';
@@ -11,6 +12,7 @@ import InventoryPage from './pages/Inventory';
 import ReportsPage from './pages/Reports';
 import SettingsPage from './pages/Settings';
 import ExpensesPage from './pages/Expenses/index';
+import PurchasingPage from './pages/Purchasing';
 import StaffPage from './pages/Staff';
 import KDSPage from './pages/KDS';
 import CustomersPage from './pages/Customers';
@@ -21,10 +23,11 @@ import OpenShiftModal from './components/organisms/modal/OpenShiftModal';
 import AppLayout from './layouts/AppLayout';
 import SetupPage from './pages/Setup';
 
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+const ProtectedRoute = ({ children, permission }: { children: React.ReactNode; permission?: Permission }) => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isSetupComplete = useAuthStore((state) => state.isSetupComplete);
   const activeShift = useAuthStore((state) => state.activeShift);
+  const role = useAuthStore((state) => state.staff?.role);
 
   if (isSetupComplete === false) {
     return <Navigate to="/setup" replace />;
@@ -32,6 +35,19 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (permission && !hasPermission(role ?? null, permission)) {
+    // UI-level gate only: the backend independently rejects unauthorized IPC
+    // calls, so this never grants access — it just avoids showing the page.
+    return (
+      <AppLayout>
+        <div className="p-10 text-center text-gray-500">
+          <p className="text-lg font-bold mb-1">Access denied</p>
+          <p className="text-sm">Your role does not include the <code>{permission}</code> permission.</p>
+        </div>
+      </AppLayout>
+    );
   }
 
   if (!activeShift) {
@@ -47,114 +63,122 @@ const App: React.FC = () => {
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="/components" element={<ComponentsPage />} />
       <Route path="/login" element={
-        useAuthStore(state => state.isSetupComplete) === false 
-          ? <Navigate to="/setup" replace /> 
+        useAuthStore(state => state.isSetupComplete) === false
+          ? <Navigate to="/setup" replace />
           : <LoginPage />
       } />
       <Route path="/setup" element={<SetupPage />} />
-      <Route 
-        path="/dashboard" 
+      <Route
+        path="/dashboard"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute permission="reports">
             <DashboardPage />
           </ProtectedRoute>
-        } 
+        }
       />
-      <Route 
-        path="/tables" 
+      <Route
+        path="/tables"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute permission="table_viewing">
             <TablesPage />
           </ProtectedRoute>
-        } 
+        }
       />
-      <Route 
-        path="/order/:tableId" 
+      <Route
+        path="/order/:tableId"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute permission="orders_create">
             <OrderPage />
           </ProtectedRoute>
-        } 
+        }
       />
-      <Route 
-        path="/menu" 
+      <Route
+        path="/menu"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute permission="menu_viewing">
             <MenuPage />
           </ProtectedRoute>
-        } 
+        }
       />
-      <Route 
-        path="/inventory" 
+      <Route
+        path="/inventory"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute permission="inventory_view">
             <InventoryPage />
           </ProtectedRoute>
-        } 
+        }
       />
-      <Route 
-        path="/kds" 
+      <Route
+        path="/kds"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute permission="kot_view">
             <KDSPage />
           </ProtectedRoute>
-        } 
+        }
       />
-      <Route 
-        path="/expenses" 
+      <Route
+        path="/expenses"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute permission="expenses_view">
             <ExpensesPage />
           </ProtectedRoute>
-        } 
+        }
       />
-      <Route 
-        path="/customers" 
+      <Route
+        path="/purchasing"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute permission="purchasing_view">
+            <PurchasingPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/customers"
+        element={
+          <ProtectedRoute permission="customers_view">
             <CustomersPage />
           </ProtectedRoute>
-        } 
+        }
       />
-      <Route 
-        path="/customers/:id" 
+      <Route
+        path="/customers/:id"
         element={
           <ProtectedRoute>
             <CustomerDetailPage />
           </ProtectedRoute>
-        } 
+        }
       />
-      <Route 
-        path="/staff" 
+      <Route
+        path="/staff"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute permission="staff">
             <StaffPage />
           </ProtectedRoute>
-        } 
+        }
       />
-      <Route 
-        path="/reports" 
+      <Route
+        path="/reports"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute permission="reports">
             <ReportsPage />
           </ProtectedRoute>
-        } 
+        }
       />
-      <Route 
-        path="/past-orders" 
+      <Route
+        path="/past-orders"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute permission="reports">
             <PastOrdersPage />
           </ProtectedRoute>
-        } 
+        }
       />
-      <Route 
-        path="/settings" 
+      <Route
+        path="/settings"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute permission="settings">
             <SettingsPage />
           </ProtectedRoute>
-        } 
+        }
       />
       <Route path="*" element={<Navigate to="/tables" replace />} />
     </Routes>

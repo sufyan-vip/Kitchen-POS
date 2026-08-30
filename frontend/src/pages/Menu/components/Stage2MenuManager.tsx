@@ -115,16 +115,26 @@ const Stage2MenuManager: React.FC<Props> = ({ menuId }) => {
     }
   }, [selectedGroupId]);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void refreshCategories(); }, [refreshCategories]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void refreshGroups(); }, [refreshGroups]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void refreshItems(); }, [refreshItems]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void refreshItemDetails(); }, [refreshItemDetails]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void refreshModifiers(); }, [refreshModifiers]);
+  useEffect(() => {
+    const timer = setTimeout(() => { void refreshCategories(); }, 0);
+    return () => { clearTimeout(timer); };
+  }, [refreshCategories]);
+  useEffect(() => {
+    const timer = setTimeout(() => { void refreshGroups(); }, 0);
+    return () => { clearTimeout(timer); };
+  }, [refreshGroups]);
+  useEffect(() => {
+    const timer = setTimeout(() => { void refreshItems(); }, 0);
+    return () => { clearTimeout(timer); };
+  }, [refreshItems]);
+  useEffect(() => {
+    const timer = setTimeout(() => { void refreshItemDetails(); }, 0);
+    return () => { clearTimeout(timer); };
+  }, [refreshItemDetails]);
+  useEffect(() => {
+    const timer = setTimeout(() => { void refreshModifiers(); }, 0);
+    return () => { clearTimeout(timer); };
+  }, [refreshModifiers]);
 
   const selectedCategory = categories.find(category => category.id === selectedCategoryId);
   const selectedItem = items.find(item => item.id === selectedItemId);

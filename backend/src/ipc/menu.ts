@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { ipcMain, dialog, app } from 'electron';
 import { getDB } from '../db';
 import { assertCurrentPermission } from '../services/authz';
@@ -159,7 +158,7 @@ export function registerMenuIPC() {
             const newItem = db.prepare(`
               INSERT INTO menu_items (category_id, name, price, price_minor, cgst_rate, sgst_rate, hsn_code, is_veg, is_available, sort_order, image_url, tax_name, tax_rate, tax_mode, dietary_label)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(newCatId, item.name, fromMinorUnits(item.price_minor ?? toMinorUnits(item.price)), fromMinorUnits(item.price_minor ?? toMinorUnits(item.price)), item.cgst_rate ?? 0, item.sgst_rate ?? 0, item.hsn_code, item.is_veg, item.is_available, item.sort_order, item.image_url, item.tax_name ?? null, item.tax_rate ?? 0, item.tax_mode ?? 'exclusive', item.dietary_label ?? null);
+            `).run(newCatId, item.name, fromMinorUnits(item.price_minor ?? toMinorUnits(item.price)), fromMinorUnits(item.price_minor ?? toMinorUnits(item.price)), item.cgst_rate, item.sgst_rate, item.hsn_code, item.is_veg, item.is_available, item.sort_order, item.image_url, item.tax_name ?? null, item.tax_rate ?? 0, item.tax_mode ?? 'exclusive', item.dietary_label ?? null);
             const newItemId = newItem.lastInsertRowid;
             
             // Clone recipes

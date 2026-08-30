@@ -1,5 +1,8 @@
 import { ipcMain } from 'electron';
 import { getDB } from '../db';
+import { toMinorUnits } from '../services/money';
+import { writeAuditLog } from '../services/audit';
+import { findActiveShiftForTimestamp, recordCashPayment } from '../services/cash';
 
 interface CustomerRow {
   id: number;
@@ -112,23 +115,46 @@ export function registerCustomersIPC() {
     try {
       const db = getDB();
 
-      const customer = db.prepare('SELECT outstanding_balance FROM customers WHERE id = ?').get(payload.customerId) as { outstanding_balance: number } | undefined;
+      const customer = db.prepare('SELECT outstanding_balance FROM customers WHERE id = ?').get(payload.customerId) as { outstanding_balance: number | null } | undefined;
       if (!customer) {
         return { success: false, error: 'Customer not found.' };
       }
-      if (payload.amount <= 0) {
+
+      // Integer paisa throughout, matching the payments/billing architecture.
+      const amountMinor = toMinorUnits(payload.amount);
+      if (amountMinor <= 0) {
         return { success: false, error: 'Settlement amount must be greater than zero.' };
       }
-      if (payload.amount > customer.outstanding_balance) {
-        return { success: false, error: `Amount exceeds outstanding balance of Rs ${customer.outstanding_balance.toFixed(2)}.` };
+      const outstandingMinor = Math.round((customer.outstanding_balance ?? 0) * 100);
+      if (amountMinor > outstandingMinor) {
+        return { success: false, error: `Amount exceeds outstanding balance of Rs ${(outstandingMinor / 100).toFixed(2)}.` };
+      }
+      const method = payload.method.toLowerCase();
+      const validMethods = ['cash', 'card', 'jazzcash', 'easypaisa', 'bank_transfer', 'other'];
+      if (!validMethods.includes(method)) {
+        return { success: false, error: `Unsupported payment method: ${method}` };
       }
 
-      db.transaction(() => {
-        db.prepare(`INSERT INTO payments (order_id, method, amount, reference) VALUES (NULL, ?, ?, ?)`).run(payload.method, payload.amount, 'Balance Settlement');
-        db.prepare(`UPDATE customers SET outstanding_balance = outstanding_balance - ? WHERE id = ?`).run(payload.amount, payload.customerId);
+      const shiftId = findActiveShiftForTimestamp(db, new Date().toISOString());
+      const paymentId = db.transaction(() => {
+        const info = db.prepare(`
+          INSERT INTO payments (order_id, provider, method, amount, amount_minor, currency, transaction_reference, provider_reference, status, reference, failure_reason, metadata, paid_at)
+          VALUES (NULL, ?, ?, ?, ?, 'PKR', NULL, NULL, 'PAID', ?, NULL, NULL, CURRENT_TIMESTAMP)
+        `).run(method, method, amountMinor / 100, amountMinor, 'Balance Settlement');
+        const id = Number(info.lastInsertRowid);
+        // Cash settlements flow into the active shift's cash tally, exactly
+        // like cash payments on bills.
+        if (method === 'cash') { recordCashPayment(db, shiftId, 'SALE', amountMinor, id); }
+        db.prepare('UPDATE customers SET outstanding_balance = ? WHERE id = ?')
+          .run((outstandingMinor - amountMinor) / 100, payload.customerId);
+        writeAuditLog(db, {
+          action: 'customer_balance_settled', entityType: 'customer', entityId: payload.customerId,
+          details: { amount_minor: amountMinor, method, paymentId: id },
+        });
+        return id;
       })();
 
-      return { success: true };
+      return { success: true, data: { paymentId } };
     } catch (e: unknown) {
       return { success: false, error: errMsg(e) };
     }

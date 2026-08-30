@@ -71,10 +71,14 @@ const TablesPage: React.FC = () => {
     }
   }, [selectedAreaId]);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void refreshAreas(); }, [refreshAreas]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void refreshTables(); }, [refreshTables]);
+  useEffect(() => {
+    const timer = setTimeout(() => { void refreshAreas(); }, 0);
+    return () => { clearTimeout(timer); };
+  }, [refreshAreas]);
+  useEffect(() => {
+    const timer = setTimeout(() => { void refreshTables(); }, 0);
+    return () => { clearTimeout(timer); };
+  }, [refreshTables]);
 
   const selectedArea = areas.find(area => area.id === selectedAreaId);
   const visibleTables = useMemo(() => tables.filter(table => table.dining_area_id === selectedAreaId), [tables, selectedAreaId]);

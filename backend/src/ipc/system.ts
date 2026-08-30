@@ -3,11 +3,19 @@ import Store from 'electron-store';
 import { getDB, closeDB } from '../db';
 import * as path from 'path';
 import * as fs from 'fs';
+import { generateSalt, hashPin, generateRecoveryCode, hashRecoveryCode, verifyRecoveryCode } from '../services/passwords';
+import { asText } from './text';
 
 const store = new Store();
 
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : 'Unknown error occurred';
+}
+
+function setAdminPin(db: ReturnType<typeof getDB>, pin: string): void {
+  const salt = generateSalt();
+  db.prepare('UPDATE staff SET name = name, pin_hash = ?, pin_salt = ?, pin = NULL WHERE role = "admin"')
+    .run(hashPin(pin, salt), salt);
 }
 
 export function registerSystemIPC() {
@@ -20,11 +28,15 @@ export function registerSystemIPC() {
     }
   });
 
-  ipcMain.handle('system:completeSetup', async (_, payload: { restaurantName: string; adminName: string; adminPin: string }) => {
+  ipcMain.handle('system:completeSetup', async (_, payload: { restaurantName: string; adminName: unknown; adminPin: unknown }) => {
     try {
       const db = getDB();
-      db.prepare('UPDATE staff SET name = ?, pin = ? WHERE role = "admin"').run(payload.adminName, payload.adminPin);
-      
+      const adminPin = asText(payload.adminPin);
+      if (adminPin.length < 4 || adminPin.length > 10) { throw new Error('Admin PIN must be 4-10 characters'); }
+      const salt = generateSalt();
+      db.prepare('UPDATE staff SET name = ?, pin_hash = ?, pin_salt = ?, pin = NULL WHERE role = "admin"')
+        .run(asText(payload.adminName).trim() || 'Admin', hashPin(adminPin, salt), salt);
+
       store.set('outlet_name', payload.restaurantName);
       store.set('is_setup_complete', true);
 
@@ -69,8 +81,8 @@ export function registerSystemIPC() {
 
   ipcMain.handle('system:generateRecoveryCode', async () => {
     try {
-      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-      
+      const code = generateRecoveryCode();
+
       const { canceled, filePath } = await dialog.showSaveDialog({
         title: 'Save Recovery Code',
         defaultPath: 'kitchen-pos-recovery-code.txt',
@@ -84,7 +96,9 @@ export function registerSystemIPC() {
       const content = `KITCHEN-POS RECOVERY CODE\n-------------------------\nKeep this code safe. If you forget your PIN, you can use this code to reset the Admin PIN.\n\nRecovery Code: ${code}\n`;
       fs.writeFileSync(filePath, content, 'utf-8');
 
-      store.set('recovery_code', code);
+      // Store only a digest — never the plaintext code.
+      store.set('recovery_code_hash', hashRecoveryCode(code));
+      store.delete('recovery_code');
 
       return { success: true };
     } catch (e) {
@@ -94,8 +108,9 @@ export function registerSystemIPC() {
 
   ipcMain.handle('system:verifyRecoveryCode', async (_, payload: { code: string }) => {
     try {
-      const storedCode = store.get('recovery_code') as string | undefined;
-      if (storedCode && storedCode === payload.code.trim().toUpperCase()) {
+      const storedHash = store.get('recovery_code_hash') as string | undefined;
+      const legacyCode = store.get('recovery_code') as string | undefined;
+      if ((storedHash && verifyRecoveryCode(payload.code, storedHash)) || (legacyCode && legacyCode === payload.code.trim().toUpperCase())) {
         return { success: true };
       }
       return { success: false, error: 'Invalid recovery code' };
@@ -104,15 +119,21 @@ export function registerSystemIPC() {
     }
   });
 
-  ipcMain.handle('system:resetAdminPin', async (_, payload: { newPin: string; code: string }) => {
+  ipcMain.handle('system:resetAdminPin', async (_, payload: { newPin: unknown; code: string }) => {
     try {
-      const storedCode = store.get('recovery_code') as string | undefined;
-      if (!storedCode || storedCode !== payload.code.trim().toUpperCase()) {
+      const storedHash = store.get('recovery_code_hash') as string | undefined;
+      const legacyCode = store.get('recovery_code') as string | undefined;
+      let codeValid = false;
+      if (storedHash && verifyRecoveryCode(payload.code, storedHash)) { codeValid = true; }
+      if (!codeValid && legacyCode && legacyCode === payload.code.trim().toUpperCase()) { codeValid = true; }
+      if (!codeValid) {
         return { success: false, error: 'Invalid recovery code' };
       }
 
+      const newPin = asText(payload.newPin);
+      if (newPin.length < 4 || newPin.length > 10) { return { success: false, error: 'PIN must be 4-10 characters' }; }
       const db = getDB();
-      db.prepare('UPDATE staff SET pin = ? WHERE role = "admin"').run(payload.newPin);
+      setAdminPin(db, newPin);
       
       return { success: true };
     } catch (e) {

@@ -3,6 +3,8 @@ import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { SvgIcon } from '../../../components/atoms/svg-sprite-loader';
 import { api } from '../../../lib/ipc';
+import { hasPermission } from '../../../lib/permissions';
+import { useAuthStore } from '../../../store/auth';
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -14,19 +16,23 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { name: "Dashboard", path: "/dashboard", icon: "dashboard" },
-  { name: "Tables", path: "/tables", icon: "grid" },
-  { name: "Order", path: "/order/0", icon: "list" },
-  { name: "KDS", path: "/kds", icon: "chef-hat" },
-  { name: "Past Orders", path: "/past-orders", icon: "clock" },
-  { name: "Customers", path: "/customers", icon: "users" },
-  { name: "Menu", path: "/menu", icon: "book-open" },
-  { name: "Inventory", path: "/inventory", icon: "inventory" },
-  { name: "Expenses", path: "/expenses", icon: "dollar" },
-  { name: "Reports", path: "/reports", icon: "analytics" },
-  { name: "Staff", path: "/staff", icon: "user" },
-  { name: "Settings", path: "/settings", icon: "settings" },
+  { name: "Dashboard", path: "/dashboard", icon: "dashboard", permission: "reports" },
+  { name: "Tables", path: "/tables", icon: "grid", permission: "table_viewing" },
+  { name: "Order", path: "/order/0", icon: "list", permission: "orders_create" },
+  { name: "KDS", path: "/kds", icon: "chef-hat", permission: "kot_view" },
+  { name: "Past Orders", path: "/past-orders", icon: "clock", permission: "reports" },
+  { name: "Customers", path: "/customers", icon: "users", permission: "customers_view" },
+  { name: "Menu", path: "/menu", icon: "book-open", permission: "menu_viewing" },
+  { name: "Inventory", path: "/inventory", icon: "inventory", permission: "inventory_view" },
+  { name: "Purchasing", path: "/purchasing", icon: "checklist", permission: "purchasing_view" },
+  { name: "Expenses", path: "/expenses", icon: "dollar", permission: "expenses_view" },
+  { name: "Reports", path: "/reports", icon: "analytics", permission: "reports" },
+  { name: "Staff", path: "/staff", icon: "user", permission: "staff" },
+  { name: "Settings", path: "/settings", icon: "settings", permission: "settings" },
 ];
+
+const navItemsForRole = (role: string | undefined): typeof navItems =>
+  navItems.filter(item => hasPermission(role ?? null, item.permission));
 
 const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed,
@@ -57,7 +63,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   const isEffectivelyExpanded =
     !isSidebarPermanent || !isCollapsed || (isPointerFine && isHovered);
 
-  const visibleNavItems = navItems.filter(item => {
+  const role = useAuthStore(state => state.staff?.role);
+  const visibleNavItems = navItemsForRole(role).filter(item => {
     if (item.name === 'KDS' && !isKdsEnabled) { return false; }
     return true;
   });

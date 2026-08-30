@@ -14,7 +14,7 @@ import { registerBackupIPC } from './ipc/backup';
 import { registerSettingsIPC } from './ipc/settings';
 import { registerPrinterIPC } from './ipc/printer';
 import { registerKDSIPC } from './ipc/kds';
-import { registerShiftsIPC } from './ipc/shifts';
+import { registerCashIPC as registerShiftsIPC } from './ipc/cash';
 import { registerExpensesIPC } from './ipc/expenses';
 import { registerCustomersIPC } from './ipc/customers';
 import { registerDashboardIPC } from './ipc/dashboard';
@@ -22,6 +22,8 @@ import { registerBusinessSessionIPC } from './ipc/business-session';
 import { registerSystemIPC } from './ipc/system';
 import { registerPaymentsIPC } from './ipc/payments';
 import { registerStage2IPC } from './ipc/stage2';
+import { registerSuppliersIPC } from './ipc/suppliers';
+import { registerAuditIPC } from './ipc/audit';
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -35,6 +37,7 @@ async function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
       preload: path.join(__dirname, 'preload.js'),
     },
   });
@@ -102,6 +105,8 @@ function registerAllIPC() {
   registerSystemIPC();
   registerPaymentsIPC();
   registerStage2IPC();
+  registerSuppliersIPC();
+  registerAuditIPC();
 }
 
 void app.whenReady().then(async () => {
