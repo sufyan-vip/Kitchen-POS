@@ -8,19 +8,14 @@ import { getAppTimezone, makeTrendBucket, reportRangeUtc, sqliteUtc, zonedDateSt
 
 interface OrderRow {
   order_id: number;
+  order_number: string;
   order_time: string;
   bill_time: string;
   total_amount: number;
+  total_amount_minor: number;
   customer_name: string | null;
   type: 'dine-in' | 'takeaway' | 'delivery';
   business_date: string | null;
-}
-
-interface AggregateRow {
-  total_orders: number;
-  total_revenue: number;
-  total_tax: number;
-  total_service_charge: number;
 }
 
 function formatHour(hourStr: string): string {
@@ -67,6 +62,7 @@ export function registerReportsIPC() {
           o.created_at as order_time,
           b.created_at as bill_time,
           b.total_amount,
+          b.total_amount_minor,
           c.name as customer_name,
           o.type,
           o.business_date
@@ -74,7 +70,7 @@ export function registerReportsIPC() {
         JOIN bills b ON o.id = b.order_id
         LEFT JOIN customers c ON o.customer_id = c.id
         WHERE o.status = 'COMPLETED' AND datetime(o.created_at) >= ?
-        GROUP BY o.id
+        GROUP BY o.id, b.total_amount_minor
         ORDER BY o.created_at DESC
         LIMIT ? OFFSET ?
       `).all(rangeStartUtc, limit, offset) as OrderRow[];
@@ -82,21 +78,24 @@ export function registerReportsIPC() {
       const aggregates = db.prepare(`
         SELECT
           COUNT(DISTINCT b.id) AS total_orders,
-          COALESCE(SUM(b.total_amount), 0) AS total_revenue
+          COALESCE(SUM(b.total_amount_minor), 0) AS total_revenue_minor
         FROM bills b
         JOIN orders o ON o.id = b.order_id
         WHERE datetime(o.created_at) >= ?
-      `).get(rangeStartUtc) as { total_orders: number; total_revenue: number };
+      `).get(rangeStartUtc) as { total_orders: number; total_revenue_minor: number };
 
-      const average_order_value = aggregates.total_orders > 0 ? aggregates.total_revenue / aggregates.total_orders : 0;
+      const totalRevenueMinor = aggregates.total_revenue_minor;
+      const totalRevenue = totalRevenueMinor / 100;
+      const average_order_value = aggregates.total_orders > 0 ? totalRevenue / aggregates.total_orders : 0;
 
       const data = orders.map(o => {
         const items = db.prepare('SELECT name, qty FROM order_items WHERE order_id = ?').all(o.order_id);
         const occupiedMs = new Date(o.bill_time).getTime() - new Date(o.order_time).getTime();
         return {
           id: o.order_id,
-          order_number: (o as OrderRow & { order_number: string }).order_number,
+          order_number: o.order_number,
           amount: o.total_amount,
+          amount_minor: o.total_amount_minor,
           customerName: o.customer_name ?? 'Walk-in',
           date: o.order_time,
           business_date: o.business_date ?? null,
@@ -109,7 +108,7 @@ export function registerReportsIPC() {
       return {
         success: true,
         data: {
-          stats: { totalOrders: aggregates.total_orders, totalRevenue: aggregates.total_revenue, averageOrderValue: average_order_value },
+          stats: { totalOrders: aggregates.total_orders, totalRevenue, totalRevenueMinor, averageOrderValue: average_order_value },
           orders: data,
           totalPages,
           currentPage: page,
@@ -381,26 +380,27 @@ export function registerReportsIPC() {
       const aggregates = db.prepare(`
         SELECT
           COUNT(id) AS total_orders,
-          COALESCE(SUM(total_amount), 0) AS total_revenue,
-          COALESCE(SUM(COALESCE(tax_amount, cgst_amount + sgst_amount)), 0) AS total_tax,
-          COALESCE(SUM(COALESCE(service_charge_amount, 0)), 0) AS total_service_charge
+          COALESCE(SUM(total_amount_minor), 0) AS total_revenue_minor,
+          COALESCE(SUM(tax_amount_minor), 0) AS total_tax_minor,
+          COALESCE(SUM(service_charge_minor), 0) AS total_service_charge_minor
         FROM bills WHERE ${range.condition}
-      `).get(...range.params) as AggregateRow | undefined;
+      `).get(...range.params) as { total_orders: number; total_revenue_minor: number; total_tax_minor: number; total_service_charge_minor: number } | undefined;
 
       const bucket = makeTrendBucket(range.trendGroupFormat, getAppTimezone());
-      const trendRaw = db.prepare(`SELECT created_at, total_amount FROM bills WHERE ${range.condition}`).all(...range.params) as Array<{ created_at: string; total_amount: number | null }>;
-      const trendMap = new Map<string, { orders: number; revenueSum: number }>();
+      const trendRaw = db.prepare(`SELECT created_at, total_amount_minor FROM bills WHERE ${range.condition}`).all(...range.params) as Array<{ created_at: string; total_amount_minor: number | null }>;
+      const trendMap = new Map<string, { orders: number; revenueSumMinor: number }>();
       for (const row of trendRaw) {
         const label = bucket(row.created_at);
-        const entry = trendMap.get(label) ?? { orders: 0, revenueSum: 0 };
+        const entry = trendMap.get(label) ?? { orders: 0, revenueSumMinor: 0 };
         entry.orders += 1;
-        entry.revenueSum += row.total_amount ?? 0;
+        entry.revenueSumMinor += row.total_amount_minor ?? 0;
         trendMap.set(label, entry);
       }
       const trendData = [...trendMap.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([label, e]) => ({
         hour: range.trendGroupFormat === '%H' ? formatHour(label) : label,
         orders: e.orders,
-        revenue: e.revenueSum,
+        revenue: e.revenueSumMinor / 100,
+        revenueMinor: e.revenueSumMinor,
       }));
 
       return {
@@ -408,9 +408,12 @@ export function registerReportsIPC() {
         data: {
           date: payload.filter,
           totalOrders: aggregates?.total_orders ?? 0,
-          totalRevenue: aggregates?.total_revenue ?? 0,
-          totalTax: aggregates?.total_tax ?? 0,
-          totalServiceCharge: aggregates?.total_service_charge ?? 0,
+          totalRevenue: (aggregates?.total_revenue_minor ?? 0) / 100,
+          totalRevenueMinor: aggregates?.total_revenue_minor ?? 0,
+          totalTax: (aggregates?.total_tax_minor ?? 0) / 100,
+          totalTaxMinor: aggregates?.total_tax_minor ?? 0,
+          totalServiceCharge: (aggregates?.total_service_charge_minor ?? 0) / 100,
+          totalServiceChargeMinor: aggregates?.total_service_charge_minor ?? 0,
           hourlyData: trendData,
         },
       };
@@ -425,13 +428,21 @@ export function registerReportsIPC() {
       const db = getDB();
       const rows = db.prepare(`
         SELECT COALESCE(tax_name, 'Tax') AS tax_name, COALESCE(tax_rate, 0) AS tax_rate,
-               COUNT(*) AS bill_count, COALESCE(SUM(COALESCE(tax_amount, cgst_amount + sgst_amount)), 0) AS tax_amount,
-               COALESCE(SUM(COALESCE(service_charge_amount, 0)), 0) AS service_charge_amount
+               COUNT(*) AS bill_count, COALESCE(SUM(tax_amount_minor), 0) AS tax_amount_minor,
+               COALESCE(SUM(service_charge_minor), 0) AS service_charge_minor
         FROM bills
         GROUP BY tax_name, tax_rate
         ORDER BY tax_name
-      `).all();
-      return { success: true, data: rows };
+      `).all() as Array<{ tax_name: string; tax_rate: number; bill_count: number; tax_amount_minor: number; service_charge_minor: number }>;
+      return { success: true, data: rows.map(r => ({
+        tax_name: r.tax_name,
+        tax_rate: r.tax_rate,
+        bill_count: r.bill_count,
+        tax_amount: r.tax_amount_minor / 100,
+        tax_amount_minor: r.tax_amount_minor,
+        service_charge_amount: r.service_charge_minor / 100,
+        service_charge_minor: r.service_charge_minor,
+      })) };
     } catch (e: unknown) {
       return { success: false, error: e instanceof Error ? e.message : 'Unknown tax report error' };
     }

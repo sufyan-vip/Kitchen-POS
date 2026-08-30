@@ -157,6 +157,12 @@ export default function KDSPage() {
           <div className="flex gap-6 h-full pb-4 overflow-y-hidden overflow-x-auto items-start">
             {tickets.map(ticket => {
               const wait = getWaitTime(ticket.created_at);
+              const ticketTitle = (() => {
+                if (ticket.table_name) { return ticket.table_name; }
+                if (ticket.type === 'delivery') { return 'Delivery'; }
+                if (ticket.type === 'takeaway') { return 'Takeaway'; }
+                return 'Walk-in';
+              })();
               
               // Wait time severity indicators
               let cardHeaderBg = 'bg-gray-900 border-gray-850';
@@ -178,9 +184,12 @@ export default function KDSPage() {
                   {/* Ticket Header */}
                   <div className="flex justify-between items-center p-4 border-b border-gray-805">
                     <div>
-                      <h3 className="text-lg font-bold text-white">{ticket.table_name}</h3>
+                      <h3 className="text-lg font-bold text-white">
+                        {ticketTitle}
+                      </h3>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-xs text-gray-500">ID: #{ticket.order_id}</span>
+                        <span className="text-xs text-gray-500">#{ticket.order_number}</span>
                         {(() => {
                           const type = ticket.type;
                           const typeStyles: Record<'dine-in' | 'takeaway' | 'delivery', string> = {

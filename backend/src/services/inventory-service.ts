@@ -62,8 +62,8 @@ export function recordMovement(db: Database.Database, input: StockMovementInput)
   const info = db.prepare(`
     INSERT INTO inventory_log (item_id, type, qty_change, stock_after, unit_cost_minor, reference, note, created_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(input.itemId, input.type, qty, Math.max(0, newQty), input.unitCostMinor ?? null, input.reference ?? null, input.note ?? null, input.staffId ?? null);
-  db.prepare('UPDATE inventory_items SET qty_in_stock = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(Math.max(0, newQty), input.itemId);
+  `).run(input.itemId, input.type, qty, newQty, input.unitCostMinor ?? null, input.reference ?? null, input.note ?? null, input.staffId ?? null);
+  db.prepare('UPDATE inventory_items SET qty_in_stock = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(newQty, input.itemId);
   return Number(info.lastInsertRowid);
 }
 

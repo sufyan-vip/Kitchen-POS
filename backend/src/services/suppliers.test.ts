@@ -100,7 +100,7 @@ describe('inventory units and movements', () => {
     const invId = Number(db.prepare("INSERT INTO inventory_items (name, unit, qty_in_stock) VALUES ('Flour', 'kg', 1)").run().lastInsertRowid);
     recordMovement(db, { itemId: invId, type: 'sale', qtyChange: -2 });
     const row = db.prepare('SELECT qty_in_stock FROM inventory_items WHERE id = ?').get(invId) as { qty_in_stock: number };
-    expect(row.qty_in_stock).toBe(0); // stock never goes below zero on record
+    expect(row.qty_in_stock).toBe(-1); // when negative inventory is enabled, the real balance is preserved
   });
 
   it('records all movement types and tracks stock_after', () => {

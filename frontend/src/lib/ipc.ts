@@ -19,6 +19,8 @@ const mockApi = {
     updateItemNote: () => Promise.resolve({ success: true }),
     voidItem: () => Promise.resolve({ success: true }),
     getOpen: () => Promise.resolve({ success: true, data: [] }),
+    getDraft: () => Promise.resolve({ success: true, data: null }),
+    discardDraft: () => Promise.resolve({ success: true }),
     getById: () => Promise.resolve({ success: true, data: null }),
     getByTable: () => Promise.resolve({ success: true, data: null }),
     sendKOT: () => Promise.resolve({ success: true, data: { kotId: 1, kotNumber: 1, orderId: 1, orderNumber: 'ORD-000001', kotType: 'MAIN', items: [] } }),
@@ -309,14 +311,29 @@ const mockApi = {
   }
 };
 
-export const api = (ipcApi ?? mockApi) as {
+// Mock IPC is only allowed in tests (Vitest) or when the developer opts in
+// explicitly with VITE_USE_MOCK_IPC=true. In production this must never fall
+// back silently because it would hide a missing Electron preload bridge and
+// could mask backend authorization failures.
+const allowMockIpc = import.meta.env.MODE === 'test' || import.meta.env.VITE_USE_MOCK_IPC === 'true';
+let resolvedApi: unknown = ipcApi;
+if (!resolvedApi && allowMockIpc) {
+  resolvedApi = mockApi;
+}
+if (!resolvedApi) {
+  throw new Error('Electron preload API is unavailable. In production the app must run inside Electron; mock IPC is disabled unless VITE_USE_MOCK_IPC=true (development/test only).');
+}
+
+export const api = resolvedApi as {
   orders: {
-    create: (payload: { tableId?: number | null; staffId?: number; covers?: number; note?: string; customerId?: number; type?: 'dine-in' | 'takeaway' | 'delivery' }) => Promise<IPCResponse<{ id: number; order_number: string }>>;
-    addItems: (payload: { orderId: number; items: OrderLineInput[]; staffId?: number }) => Promise<IPCResponse<{ added: number; order: unknown }>>;
+    create: (payload: { tableId?: number | null; staffId?: number; covers?: number; note?: string; customerId?: number; type?: 'dine-in' | 'takeaway' | 'delivery'; status?: 'DRAFT' | 'OPEN' }) => Promise<IPCResponse<{ id: number; order_number: string }>>;
+    addItems: (payload: { orderId: number; items: OrderLineInput[]; staffId?: number; keepDraft?: boolean }) => Promise<IPCResponse<{ added: number; order: unknown }>>;
     updateItemQty: (payload: { orderId: number; orderItemId: number; qty: number }) => Promise<IPCResponse<unknown>>;
     updateItemNote: (payload: { orderId: number; orderItemId: number; note: string | null }) => Promise<IPCResponse<unknown>>;
     voidItem: (payload: { orderId: number; orderItemId: number; reason?: string }) => Promise<IPCResponse<unknown>>;
     getOpen: () => Promise<IPCResponse<unknown[]>>;
+    getDraft: () => Promise<IPCResponse<(Order & { items: OrderItem[] }) | null>>;
+    discardDraft: (payload?: { orderId?: number }) => Promise<IPCResponse<unknown>>;
     getById: (payload: { orderId: number }) => Promise<IPCResponse<(Order & { items: OrderItem[] }) | null>>;
     getByTable: (payload: { tableId: number }) => Promise<IPCResponse<(Order & { items: OrderItem[]; customer_name?: string | null }) | null>>;
     sendKOT: (payload: { orderId: number; staffId?: number }) => Promise<IPCResponse<SendKOTResult>>;

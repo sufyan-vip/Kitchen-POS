@@ -130,13 +130,13 @@ const LoginPage: React.FC = () => {
             <h2 className="text-2xl font-bold mb-4 text-white tracking-widest uppercase">Recover PIN</h2>
             {recoveryStep === 'verify' ? (
               <>
-                <p className="text-sm text-white/80 mb-6 text-center">Enter your 6-character Recovery Code.</p>
+                <p className="text-sm text-white/80 mb-6 text-center">Enter your 12-character Recovery Code.</p>
                 <Input 
                   placeholder="Recovery Code" 
                   value={recoveryCode} 
                   onChange={(e) => { setRecoveryCode(e.target.value.toUpperCase()); }} 
                   className="mb-6 text-center tracking-widest uppercase font-mono bg-white/20 border-white/30 text-white placeholder:text-white/50"
-                  maxLength={6}
+                  maxLength={12}
                 />
                 <Button variant="primary" className="w-full mb-3 bg-cyan-500 hover:bg-cyan-400 border-none shadow-[0_0_15px_rgba(34,211,238,0.4)] text-white" onClick={() => { void handleVerifyRecoveryCode(); }}>Verify Code</Button>
                 <Button variant="ghost" className="w-full text-white/70 hover:text-white hover:bg-white/10" onClick={() => { setIsRecovering(false); }}>Cancel</Button>

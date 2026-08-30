@@ -24,18 +24,18 @@ const SetupPage: React.FC = () => {
     
     setLoading(true);
     try {
+      // The recovery code must be saved before setup is considered complete.
+      // Without a stored hash the admin PIN could never be recovered, so a
+      // cancelled/failed save aborts setup instead of silently skipping it.
+      const codeRes = await api.system.generateRecoveryCode();
+      if (!codeRes.success) {
+        showToast({ message: codeRes.error === 'Cancelled' ? 'Recovery code save was cancelled. Setup requires a saved recovery code.' : (codeRes.error ?? 'Failed to generate recovery code'), variant: 'warning' });
+        return;
+      }
+
       const res = await api.system.completeSetup({ restaurantName, adminName, adminPin });
       if (res.success) {
-        showToast({ message: 'Setup completed successfully', variant: 'success' });
-        
-        // Generate recovery code
-        const codeRes = await api.system.generateRecoveryCode();
-        if (codeRes.success) {
-          showToast({ message: 'Recovery code saved successfully', variant: 'success' });
-        } else {
-          showToast({ message: 'Recovery code not saved. You can generate one later in Settings.', variant: 'warning' });
-        }
-
+        showToast({ message: 'Setup completed and recovery code saved', variant: 'success' });
         void checkSetup();
         navigate('/login');
       } else {

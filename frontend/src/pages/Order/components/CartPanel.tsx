@@ -17,13 +17,21 @@ interface Props {
 
 const CartPanel: React.FC<Props> = ({ unsentItems, sentKOTs, onUpdateQty, onUpdateNote, onCancelItem, onSendKOT, onGenerateBill, onVoidOrder }) => {
   const [expandedKOTs, setExpandedKOTs] = useState<number[]>([]);
-  
+
   const toggleKOT = (num: number) => {
     setExpandedKOTs(prev => prev.includes(num) ? prev.filter(n => n !== num) : [...prev, num]);
   };
 
   const allSentItems = sentKOTs.flatMap(k => k.items);
-  const subtotal = [...unsentItems, ...allSentItems].reduce((sum, item) => sum + item.price * item.qty, 0);
+  const subtotal = [...unsentItems, ...allSentItems].reduce((sum, item) => {
+    const unitMinor = item.variant_price_minor ?? Math.round(item.price * 100);
+    return sum + (unitMinor * item.qty) / 100;
+  }, 0);
+
+  const cartLineKey = (item: CartItem): string => {
+    const mods = (item.modifiers ?? []).map(m => `${m.id}x${m.qty}`).sort().join(',');
+    return `${item.id}:${item.variant_id ?? 'base'}:${mods}`;
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -31,7 +39,7 @@ const CartPanel: React.FC<Props> = ({ unsentItems, sentKOTs, onUpdateQty, onUpda
         {/* Render Sent KOTs */}
         {sentKOTs.map(kot => (
           <div key={kot.kotNumber} className="border border-gray-200 rounded overflow-hidden">
-            <button 
+            <button
               className="w-full flex items-center justify-between p-3 bg-gray-100 hover:bg-gray-200 transition-colors"
               onClick={() => { toggleKOT(kot.kotNumber); }}
             >
@@ -44,7 +52,7 @@ const CartPanel: React.FC<Props> = ({ unsentItems, sentKOTs, onUpdateQty, onUpda
             {expandedKOTs.includes(kot.kotNumber) && (
               <div className="p-3 bg-white divide-y divide-gray-100">
                 {kot.items.map(item => (
-                  <div key={item.id} className="py-2 flex justify-between items-start first:pt-0 last:pb-0">
+                  <div key={`${cartLineKey(item)}-${item.orderItemId ?? item.id}`} className="py-2 flex justify-between items-start first:pt-0 last:pb-0">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-sm text-gray-800">{item.qty}x {item.name}</span>
@@ -55,7 +63,7 @@ const CartPanel: React.FC<Props> = ({ unsentItems, sentKOTs, onUpdateQty, onUpda
                     <div className="flex flex-col items-end pl-2">
                       <span className="text-sm font-bold text-gray-700">Rs {(item.price * item.qty).toFixed(2)}</span>
                       {item.orderItemId !== undefined && (
-                        <button 
+                        <button
                           onClick={() => { onCancelItem(item.orderItemId as number); }}
                           className="text-red-500 hover:text-red-700 text-xs mt-1 font-medium flex items-center gap-1"
                           title="Void item"
@@ -77,28 +85,41 @@ const CartPanel: React.FC<Props> = ({ unsentItems, sentKOTs, onUpdateQty, onUpda
             <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Unsent Items</h3>
             <div className="space-y-2">
               {unsentItems.map(item => (
-                <div key={item.id} className="border border-blue-100 rounded p-3 bg-blue-50 relative">
+                <div key={`${cartLineKey(item)}-${item.orderItemId ?? `new-${item.name}-${item.note}`}`} className="border border-blue-100 rounded p-3 bg-blue-50 relative">
                   <div className="flex justify-between items-start mb-2">
-                    <h4 className="font-medium text-blue-900 pr-8">{item.name}</h4>
-                    <p className="font-bold text-blue-900 shrink-0">Rs {(item.price * item.qty).toFixed(2)}</p>
+                    <div className="pr-8">
+                      <h4 className="font-medium text-blue-900">{item.name}</h4>
+                      {item.variant_name && <p className="text-xs text-blue-700 mt-0.5">Variant: {item.variant_name}</p>}
+                      {(item.modifiers ?? []).length > 0 && (
+                        <p className="text-xs text-blue-700 mt-0.5">
+                          {item.modifiers?.map(m => `${m.name}${m.qty > 1 ? ` x${m.qty}` : ''}`).join(', ')}
+                        </p>
+                      )}
+                    </div>
+                    <p className="font-bold text-blue-900 shrink-0">Rs {((item.variant_price_minor ?? Math.round(item.price * 100)) * item.qty / 100).toFixed(2)}</p>
                   </div>
-                  <div className="flex items-center justify-between mt-2">
-                    <div className="flex items-center">
-                      <Stepper 
-                        value={item.qty} 
-                        onChange={(newQty) => { onUpdateQty(item.id, newQty - item.qty); }} 
-                        min={0} 
-                      />
-                    </div>
-                    <div className="flex-1 ml-3">
-                      <Input 
-                        type="text" 
-                        placeholder="Add note..." 
-                        value={item.note}
-                        onChange={(e) => { onUpdateNote(item.id, e.target.value); }}
-                        className="bg-white"
-                      />
-                    </div>
+                  <div className="flex items-center justify-between gap-2 mt-2">
+                    <Stepper
+                      value={item.qty}
+                      onChange={(newQty) => { onUpdateQty(item.id, newQty - item.qty); }}
+                      min={0}
+                    />
+                    {item.orderItemId !== undefined ? (
+                      <button
+                        onClick={() => { onCancelItem(item.orderItemId as number); }}
+                        className="text-red-500 hover:text-red-700 text-xs font-medium flex items-center gap-1"
+                        title="Void item"
+                      >
+                        <SvgIcon name="trash" className="h-3 w-3" /> Void
+                      </button>
+                    ) : <span />}
+                    <Input
+                      type="text"
+                      placeholder="Add note..."
+                      value={item.note}
+                      onChange={(e) => { onUpdateNote(item.id, e.target.value); }}
+                      className="bg-white flex-1"
+                    />
                   </div>
                 </div>
               ))}
@@ -120,7 +141,7 @@ const CartPanel: React.FC<Props> = ({ unsentItems, sentKOTs, onUpdateQty, onUpda
         </div>
         <div className="space-y-3">
           <div className="flex gap-2">
-            <Button 
+            <Button
               variant="outline"
               block
               onClick={() => { onSendKOT(false); }}
@@ -128,7 +149,7 @@ const CartPanel: React.FC<Props> = ({ unsentItems, sentKOTs, onUpdateQty, onUpda
             >
               Save KOT
             </Button>
-            <Button 
+            <Button
               variant="secondary"
               block
               onClick={() => { onSendKOT(true); }}
@@ -137,7 +158,7 @@ const CartPanel: React.FC<Props> = ({ unsentItems, sentKOTs, onUpdateQty, onUpda
               Print KOT
             </Button>
           </div>
-          <Button 
+          <Button
             variant="primary"
             block
             onClick={onGenerateBill}
@@ -145,7 +166,7 @@ const CartPanel: React.FC<Props> = ({ unsentItems, sentKOTs, onUpdateQty, onUpda
           >
             Generate Bill
           </Button>
-          <Button 
+          <Button
             variant="outline"
             block
             className="text-red-600 border-red-600 hover:bg-red-50"

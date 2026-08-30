@@ -74,10 +74,10 @@ describe('BillModal — authoritative backend totals', () => {
     await waitFor(() => { expect(screen.getAllByText('Rs 115.00').length).toBeGreaterThan(0); });
     act(() => { ref.current?.save(); });
     await waitFor(() => { expect(createBill).toHaveBeenCalledTimes(1); });
-    const payload = createBill.mock.calls[0][0] as { orderId: number; payments: Array<{ method: string; amount: number }>; discount: number };
+    const payload = createBill.mock.calls[0][0] as { orderId: number; payments: Array<{ method: string; amount: number; status?: string }>; discount: number };
     expect(payload.orderId).toBe(7);
     // Default cash payment equals the authoritative total (Rs 115.00)
-    expect(payload.payments).toEqual([{ method: 'cash', amount: 115 }]);
+    expect(payload.payments).toEqual([{ method: 'cash', amount: 115, status: 'PAID' }]);
   });
 
   it('recomputes the grand total from the authoritative subtotal when a discount is applied', async () => {
@@ -89,9 +89,9 @@ describe('BillModal — authoritative backend totals', () => {
     expect(screen.getAllByText('Rs 105.00').length).toBe(3); // grand total + tendered + remaining
     act(() => { ref.current?.save(); });
     await waitFor(() => { expect(createBill).toHaveBeenCalledTimes(1); });
-    const payload = createBill.mock.calls[0][0] as { payments: Array<{ method: string; amount: number }>; discount: number };
+    const payload = createBill.mock.calls[0][0] as { payments: Array<{ method: string; amount: number; status?: string }>; discount: number };
     expect(payload.discount).toBe(10);
-    expect(payload.payments).toEqual([{ method: 'cash', amount: 105 }]);
+    expect(payload.payments).toEqual([{ method: 'cash', amount: 105, status: 'PAID' }]);
   });
 
   it('disables billing when authoritative totals cannot be loaded', async () => {

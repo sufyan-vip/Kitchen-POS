@@ -292,6 +292,33 @@ const SettingsPage: React.FC = () => {
 
         <Card>
           <CardHeader>
+            <CardTitle>Localization & Payments</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <Input label="Country" placeholder="Pakistan" value={settingString(settings.country, 'Pakistan')} onChange={(e) => { setSettings({ ...settings, country: e.target.value }); }} />
+              <Input label="Currency" placeholder="PKR" value={settingString(settings.currency, 'PKR')} onChange={(e) => { setSettings({ ...settings, currency: e.target.value.toUpperCase() }); }} />
+              <Input label="Currency Symbol" placeholder="Rs" value={settingString(settings.currency_symbol, 'Rs')} onChange={(e) => { setSettings({ ...settings, currency_symbol: e.target.value }); }} />
+              <Input label="Currency Locale" placeholder="en-PK" value={settingString(settings.currency_locale, 'en-PK')} onChange={(e) => { setSettings({ ...settings, currency_locale: e.target.value }); }} />
+              <Input label="Timezone" placeholder="Asia/Karachi" value={settingString(settings.timezone, 'Asia/Karachi')} onChange={(e) => { setSettings({ ...settings, timezone: e.target.value }); }} />
+              <Input label="Date Format" placeholder="dd/MM/yyyy" value={settingString(settings.date_format, 'dd/MM/yyyy')} onChange={(e) => { setSettings({ ...settings, date_format: e.target.value }); }} />
+              <Input label="Time Format" placeholder="12h" value={settingString(settings.time_format, '12h')} onChange={(e) => { setSettings({ ...settings, time_format: e.target.value }); }} />
+            </div>
+            <Button variant="primary" onClick={() => { void api.settings.save(settings).then(res => { showToast({ message: res.success ? 'Localization settings saved' : 'Failed to save localization settings', variant: res.success ? 'success' : 'error' }); }); }}>Save Localization Settings</Button>
+            <div className="border-t border-gray-100 pt-4">
+              <h3 className="text-sm font-semibold text-gray-800 mb-1">Digital Payments</h3>
+              <p className="text-sm text-gray-500">Pakistan wallet adapters are installed in sandbox mode and remain <strong>PENDING</strong> until official merchant credentials are configured. The app never fabricates a successful payment.</p>
+              <div className="flex flex-wrap gap-2 mt-2">
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">JazzCash — PENDING</span>
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">Easypaisa — PENDING</span>
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Cash/Card — PAID</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle>Printer</CardTitle>
           </CardHeader>
           <CardContent>
@@ -486,31 +513,59 @@ const SettingsPage: React.FC = () => {
           <CardHeader>
             <CardTitle>Inventory Settings</CardTitle>
           </CardHeader>
-          <CardContent className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-gray-700">Auto-Debit Inventory on KOT</p>
-              <p className="text-sm text-gray-500">Automatically deduct ingredients from stock when an order is sent to the kitchen.</p>
-            </div>
-            <Toggle
-              checked={settings.inventory_auto_debit !== false}
-              onChange={(e) => {
-                void (async () => {
-                  try {
-                    const val = e.target.checked;
-                    setSettings({ ...settings, inventory_auto_debit: val });
-                    const res = await api.settings.save({ inventory_auto_debit: val });
-                    if (res.success) {
-                      showToast({ message: `Auto-Debit Inventory on KOT ${val ? 'enabled' : 'disabled'}`, variant: 'success' });
-                    } else {
-                      showToast({ message: 'Failed to save Auto-Debit settings', variant: 'error' });
+          <CardContent className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-gray-700">Auto-Debit Inventory on KOT</p>
+                <p className="text-sm text-gray-500">Automatically deduct ingredients from stock when an order is sent to the kitchen.</p>
+              </div>
+              <Toggle
+                checked={settings.inventory_auto_debit !== false}
+                onChange={(e) => {
+                  void (async () => {
+                    try {
+                      const val = e.target.checked;
+                      setSettings({ ...settings, inventory_auto_debit: val });
+                      const res = await api.settings.save({ inventory_auto_debit: val });
+                      if (res.success) {
+                        showToast({ message: `Auto-Debit Inventory on KOT ${val ? 'enabled' : 'disabled'}`, variant: 'success' });
+                      } else {
+                        showToast({ message: 'Failed to save Auto-Debit settings', variant: 'error' });
+                      }
+                    } catch (err) {
+                      console.error(err);
+                      showToast({ message: 'Failed to update Auto-Debit setting', variant: 'error' });
                     }
-                  } catch (err) {
-                    console.error(err);
-                    showToast({ message: 'Failed to update Auto-Debit setting', variant: 'error' });
-                  }
-                })();
-              }}
-            />
+                  })();
+                }}
+              />
+            </div>
+            <div className="flex items-center justify-between border-t border-gray-100 pt-4">
+              <div>
+                <p className="font-medium text-gray-700">Allow Negative Inventory</p>
+                <p className="text-sm text-gray-500">Record the true negative balance instead of clamping stock to zero when the setting is enabled.</p>
+              </div>
+              <Toggle
+                checked={settings.allow_negative_inventory === true}
+                onChange={(e) => {
+                  void (async () => {
+                    try {
+                      const val = e.target.checked;
+                      setSettings({ ...settings, allow_negative_inventory: val });
+                      const res = await api.settings.save({ allow_negative_inventory: val });
+                      if (res.success) {
+                        showToast({ message: `Allow negative inventory ${val ? 'enabled' : 'disabled'}`, variant: 'success' });
+                      } else {
+                        showToast({ message: 'Failed to save inventory setting', variant: 'error' });
+                      }
+                    } catch (err) {
+                      console.error(err);
+                      showToast({ message: 'Failed to update inventory setting', variant: 'error' });
+                    }
+                  })();
+                }}
+              />
+            </div>
           </CardContent>
         </Card>
 
