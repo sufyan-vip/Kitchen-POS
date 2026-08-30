@@ -1,4 +1,3 @@
-/* eslint-disable */
 import crypto from 'crypto';
 
 export type PaymentStatus = 'PENDING' | 'AUTHORIZED' | 'PAID' | 'FAILED' | 'CANCELLED' | 'REFUNDED' | 'EXPIRED';
@@ -15,7 +14,7 @@ const allowedTransitions: Record<PaymentStatus, PaymentStatus[]> = {
 };
 
 export function canTransitionPaymentStatus(from: PaymentStatus, to: PaymentStatus): boolean {
-  return from === to || (allowedTransitions[from]?.includes(to));
+  return from === to || allowedTransitions[from].includes(to);
 }
 
 export function assertValidPaymentTransition(from: PaymentStatus, to: PaymentStatus): void {
@@ -51,6 +50,22 @@ function txRef(prefix: string, orderId: number): string {
   return `${prefix}-${orderId}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
 }
 
+/**
+ * Payment provider adapters.
+ *
+ * SAFE-SANDBOX DESIGN (deliberate): JazzCash and Easypaisa require official
+ * merchant accounts, API credentials, request signing and status callbacks.
+ * Until a merchant is configured, adapters here:
+ *   - NEVER invent credentials, merchant IDs, signatures or endpoints;
+ *   - NEVER fabricate a PAID status — requests stay PENDING with metadata
+ *     explaining that the provider is not configured;
+ *   - read credentials only from backend environment variables
+ *     (JAZZCASH_* / EASYPAISA_*) which are never stored in the database,
+ *     settings, or logs.
+ * A production integration must be completed from the current official
+ * provider documentation (request format, signature scheme, callback
+ * verification) — see createPayment()/verifyPayment() below.
+ */
 abstract class EnvConfiguredProvider implements PaymentProvider {
   abstract name: PaymentProviderName;
   protected mode: string;
@@ -59,7 +74,7 @@ abstract class EnvConfiguredProvider implements PaymentProvider {
   }
   protected abstract envPrefix: string;
   protected getMode(): string {
-    return this.env[`${this.envPrefix}_MODE`] || this.mode;
+    return this.env[`${this.envPrefix}_MODE`] ?? this.mode;
   }
   protected hasCredentials(keys: string[]): boolean {
     return keys.every(k => Boolean(this.env[k]));

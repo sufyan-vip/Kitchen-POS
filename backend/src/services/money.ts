@@ -1,11 +1,10 @@
-/* eslint-disable */
 export const DEFAULT_CURRENCY = 'PKR';
 
 export function toMinorUnits(amount: number | string): number {
   if (typeof amount === 'number' && !Number.isFinite(amount)) {
     throw new Error('Invalid monetary amount');
   }
-  const normalized = (typeof amount === 'number' ? amount.toFixed(4) : String(amount)).trim().replace(/,/g, '');
+  const normalized = (typeof amount === 'number' ? amount.toFixed(4) : amount).trim().replace(/,/g, '');
   if (!/^-?\d+(\.\d{0,4})?$/.test(normalized)) {
     throw new Error(`Invalid monetary amount: ${amount}`);
   }
@@ -13,7 +12,7 @@ export function toMinorUnits(amount: number | string): number {
   const unsigned = negative ? normalized.slice(1) : normalized;
   const [whole, fraction = ''] = unsigned.split('.');
   const padded = (`${fraction  }000`).slice(0, 3);
-  const thirdDigit = Number(padded[2] ?? '0');
+  const thirdDigit = Number(padded.slice(2, 3) || '0');
   let minor = Number(whole || '0') * 100 + Number(padded.slice(0, 2));
   if (thirdDigit >= 5) {minor += 1;}
   return negative ? -minor : minor;

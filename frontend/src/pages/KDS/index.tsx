@@ -68,11 +68,13 @@ export default function KDSPage() {
       .catch(console.error);
   };
 
-  const handleUpdateOrderStatus = (orderId: number, status: KDSTicketItem['preparation_status']) => {
+  const handleUpdateOrderStatus = (orderId: number, status: 'READY' | 'COMPLETED') => {
     api.kds.updateOrderStatus({ orderId, status })
       .then(res => {
         if (res.success) {
           fetchTickets();
+        } else {
+          setError(res.error ?? 'Failed to update order status');
         }
       })
       .catch(console.error);
@@ -244,14 +246,16 @@ export default function KDSPage() {
                     </div>
                   )}
 
-                  {/* Bulk Actions Footer */}
+                  {/* Bulk Actions Footer — gated by the order's KDS state machine */}
                   <div className="p-3 border-t border-gray-850 bg-gray-950/40 rounded-b-xl flex gap-2">
                     <Button 
                       variant="outline" 
                       size="sm"
                       block
-                      onClick={() => { handleUpdateOrderStatus(ticket.order_id, 'ready'); }}
-                      className="text-xs border-gray-850 text-emerald-400 hover:bg-emerald-950/30"
+                      disabled={ticket.order_kds_status !== 'PREPARING'}
+                      title={ticket.order_kds_status !== 'PREPARING' ? 'Available once items are being prepared' : 'Mark every item ready'}
+                      onClick={() => { handleUpdateOrderStatus(ticket.order_id, 'READY'); }}
+                      className="text-xs border-gray-850 text-emerald-400 hover:bg-emerald-950/30 disabled:opacity-40"
                     >
                       All Ready
                     </Button>
@@ -259,8 +263,10 @@ export default function KDSPage() {
                       variant="outline" 
                       size="sm"
                       block
-                      onClick={() => { handleUpdateOrderStatus(ticket.order_id, 'served'); }}
-                      className="text-xs border-gray-850 text-gray-400 hover:bg-gray-800"
+                      disabled={ticket.order_kds_status !== 'READY'}
+                      title={ticket.order_kds_status !== 'READY' ? 'Available once all items are ready' : 'Mark the order served'}
+                      onClick={() => { handleUpdateOrderStatus(ticket.order_id, 'COMPLETED'); }}
+                      className="text-xs border-gray-850 text-gray-400 hover:bg-gray-800 disabled:opacity-40"
                     >
                       All Served
                     </Button>

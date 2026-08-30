@@ -1,4 +1,4 @@
-import { Category, MenuItem, InventoryItem, Order, OrderItem, CartItem, KDSTicket, Shift, RecipeItem, Table, Expense, Staff, BusinessSession, AutoBackupConfig, BackupReminderConfig, Stage2Category, Stage2MenuItem, MenuItemVariant, ModifierGroup, Modifier, DiningArea, Stage2Table, Stage2TableStatus, Stage2TableShape } from '../types/models';
+import { Category, MenuItem, InventoryItem, Order, OrderItem, KDSTicket, Shift, RecipeItem, Table, Expense, Staff, BusinessSession, AutoBackupConfig, BackupReminderConfig, Stage2Category, Stage2MenuItem, MenuItemVariant, ModifierGroup, Modifier, DiningArea, Stage2Table, Stage2TableStatus, Stage2TableShape, OrderLineInput, SendKOTResult, Supplier, Purchase, PurchaseItem } from '../types/models';
 
 export interface IPCResponse<T> {
   success: boolean;
@@ -6,22 +6,40 @@ export interface IPCResponse<T> {
   error?: string;
 }
 
+export type KDSOrderStatus = 'NEW' | 'PREPARING' | 'READY' | 'COMPLETED' | 'CANCELLED';
+export type KDSItemStatus = 'pending' | 'preparing' | 'ready' | 'served';
+
 const ipcApi = (window as unknown as { api: unknown }).api;
 
 const mockApi = {
   orders: {
-    create: () => Promise.resolve({ success: true, data: 1 }),
+    create: () => Promise.resolve({ success: true, data: { id: 1, order_number: 'ORD-000001' } }),
+    addItems: () => Promise.resolve({ success: true, data: { added: 0, order: {} } }),
+    updateItemQty: () => Promise.resolve({ success: true }),
+    updateItemNote: () => Promise.resolve({ success: true }),
+    voidItem: () => Promise.resolve({ success: true }),
     getOpen: () => Promise.resolve({ success: true, data: [] }),
+    getById: () => Promise.resolve({ success: true, data: null }),
     getByTable: () => Promise.resolve({ success: true, data: null }),
-    sendKOT: () => Promise.resolve({ success: true, data: 1 }),
+    sendKOT: () => Promise.resolve({ success: true, data: { kotId: 1, kotNumber: 1, orderId: 1, orderNumber: 'ORD-000001', kotType: 'MAIN', items: [] } }),
+    updateStatus: () => Promise.resolve({ success: true }),
+    updateType: () => Promise.resolve({ success: true }),
+    applyDiscount: () => Promise.resolve({ success: true }),
+    changeTable: () => Promise.resolve({ success: true }),
     cancelOrder: () => Promise.resolve({ success: true }),
+    updateCustomer: () => Promise.resolve({ success: true }),
   },
   kds: {
     getActiveTickets: () => Promise.resolve({ success: true, data: [] }),
     updateItemStatus: () => Promise.resolve({ success: true }),
+    updateKotStatus: () => Promise.resolve({ success: true }),
     updateOrderStatus: () => Promise.resolve({ success: true }),
   },
   menu: {
+    getMenus: () => Promise.resolve({ success: true, data: [{ id: 1, name: 'Main Menu', is_active: 1, is_default: 1 }] }),
+    upsertMenu: () => Promise.resolve({ success: true, data: { id: 999 } }),
+    duplicateMenu: () => Promise.resolve({ success: true, data: { id: 999 } }),
+    uploadImage: () => Promise.resolve({ success: true, data: 'file:///tmp/img.png' }),
     getAll: () => Promise.resolve({
       success: true,
       data: [
@@ -48,10 +66,6 @@ const mockApi = {
         }
       ]
     }),
-    getMenus: () => Promise.resolve({ success: true, data: [{ id: 1, name: 'Main Menu', is_active: 1, is_default: 1 }] }),
-    upsertMenu: () => Promise.resolve({ success: true, data: { id: 999 } }),
-    duplicateMenu: () => Promise.resolve({ success: true, data: { id: 999 } }),
-    uploadImage: () => Promise.resolve({ success: true, data: 'file:///tmp/img.png' }),
     upsertItem: () => Promise.resolve({ success: true, data: { id: 999 } }),
     deleteItem: () => Promise.resolve({ success: true }),
     toggleAvailable: () => Promise.resolve({ success: true }),
@@ -120,6 +134,10 @@ const mockApi = {
       list: () => Promise.resolve({ success: true, data: [] }),
     },
   },
+  payments: {
+    updateStatus: () => Promise.resolve({ success: true }),
+    verify: () => Promise.resolve({ success: true }),
+  },
   billing: {
     createBill: () => Promise.resolve({ success: true }),
     getBill: () => Promise.resolve({ success: true, data: {} }),
@@ -130,8 +148,26 @@ const mockApi = {
   },
   inventory: {
     getAll: () => Promise.resolve({ success: true, data: [] }),
+    getLowStock: () => Promise.resolve({ success: true, data: [] }),
+    getMovements: () => Promise.resolve({ success: true, data: [] }),
+    convert: () => Promise.resolve({ success: true, data: 0 }),
     adjust: () => Promise.resolve({ success: true }),
     upsertItem: () => Promise.resolve({ success: true }),
+    updateRecipe: () => Promise.resolve({ success: true }),
+  },
+  suppliers: {
+    list: () => Promise.resolve({ success: true, data: [] as Supplier[] }),
+    save: () => Promise.resolve({ success: true, data: { id: 1 } }),
+  },
+  purchases: {
+    list: () => Promise.resolve({ success: true, data: [] as Purchase[] }),
+    items: () => Promise.resolve({ success: true, data: [] as PurchaseItem[] }),
+    create: () => Promise.resolve({ success: true, data: { id: 1, purchase_number: 'PO-000001' } }),
+    receive: () => Promise.resolve({ success: true }),
+    cancel: () => Promise.resolve({ success: true }),
+  },
+  audit: {
+    list: () => Promise.resolve({ success: true, data: [] }),
   },
   staff: {
     login: (payload: { pin: string }) => {
@@ -140,6 +176,7 @@ const mockApi = {
       }
       return Promise.resolve({ success: false, error: 'Invalid PIN' });
     },
+    logout: () => Promise.resolve({ success: true }),
     getAll: () => Promise.resolve({ success: true, data: [] }),
     upsert: () => Promise.resolve({ success: true, data: { id: 2 } }),
     delete: () => Promise.resolve({ success: true }),
@@ -158,11 +195,14 @@ const mockApi = {
         return Promise.resolve({ success: true });
       },
       getTotals: (_payload: { openedAt: string }) => Promise.resolve({ success: true, data: { cash: 0, card: 0, jazzcash: 0, easypaisa: 0, bank_transfer: 0, other: 0 } }),
+      list: () => Promise.resolve({ success: true, data: [] }),
+      addCashEntry: () => Promise.resolve({ success: true }),
+      getCashEntries: () => Promise.resolve({ success: true, data: [] }),
     };
   })(),
   reports: {
-    daily: () => Promise.resolve({ 
-      success: true, 
+    daily: () => Promise.resolve({
+      success: true,
       data: {
         date: new Date().toISOString().split('T')[0],
         totalOrders: 0,
@@ -170,10 +210,20 @@ const mockApi = {
         totalTax: 0,
         totalServiceCharge: 0,
         hourlyData: []
-      } 
+      }
     }),
+    sales: () => Promise.resolve({ success: true, data: {} }),
+    products: () => Promise.resolve({ success: true, data: [] }),
+    categories: () => Promise.resolve({ success: true, data: [] }),
+    modifiers: () => Promise.resolve({ success: true, data: [] }),
+    tables: () => Promise.resolve({ success: true, data: [] }),
+    kitchen: () => Promise.resolve({ success: true, data: [] }),
+    inventory: () => Promise.resolve({ success: true, data: [] }),
+    expenses: () => Promise.resolve({ success: true, data: [] }),
     gst: () => Promise.resolve({ success: true, data: {} }),
     tax: () => Promise.resolve({ success: true, data: [] }),
+    getPastOrders: () => Promise.resolve({ success: true, data: { stats: { totalOrders: 0, totalRevenue: 0, averageOrderValue: 0 }, orders: [], totalPages: 1, currentPage: 1 } }),
+    printPastBill: () => Promise.resolve({ success: true }),
   },
   backup: {
     export: () => Promise.resolve({ success: true, data: '/mock/backup.db' }),
@@ -203,6 +253,7 @@ const mockApi = {
   },
   expenses: {
     getAll: () => Promise.resolve({ success: true, data: [] }),
+    getCategories: () => Promise.resolve({ success: true, data: [] }),
     create: () => Promise.resolve({ success: true, data: { id: 1 } }),
     delete: () => Promise.resolve({ success: true }),
   },
@@ -217,7 +268,17 @@ const mockApi = {
     getHistory: () => Promise.resolve({ success: true, data: [] }),
   },
   dashboard: {
-    getMetrics: () => Promise.resolve({ success: true, data: { metrics: { totalSales: 0, totalOrders: 0, averageOrderValue: 0, totalCustomers: 0, outstandingBalances: 0 }, trendData: [], topItemsData: [] } }),
+    getMetrics: () => Promise.resolve({
+      success: true,
+      data: {
+        metrics: {
+          totalSales: 0, totalOrders: 0, averageOrderValue: 0, totalCovers: 0, outstandingBalances: 0,
+          cash: 0, card: 0, jazzcash: 0, easypaisa: 0, bank_transfer: 0, other: 0, unpaid: 0,
+          openTables: 0, kitchenPendingKots: 0, completedOrdersToday: 0, lowStockCount: 0,
+        },
+        trendData: [], topItemsData: [], lowStock: [], recentOrders: [],
+      }
+    }),
   },
   businessSession: (() => {
     let session: BusinessSession | null = null;
@@ -237,6 +298,9 @@ const mockApi = {
       },
     };
   })(),
+  auth: {
+    check: () => Promise.resolve({ success: true, data: true }),
+  },
   onBackupReminder: (_callback: () => void) => {
     // mock: no-op
   },
@@ -247,18 +311,27 @@ const mockApi = {
 
 export const api = (ipcApi ?? mockApi) as {
   orders: {
-    create: (payload: { tableId: number; staffId?: number; covers?: number; note?: string; customerId?: number; type?: 'dine-in' | 'takeaway' | 'delivery' }) => Promise<IPCResponse<number>>;
-    getOpen: () => Promise<IPCResponse<unknown>>;
-    getByTable: (payload: { tableId: number }) => Promise<IPCResponse<(Order & { items: OrderItem[] }) | null>>;
-    sendKOT: (payload: { tableId: number; items: CartItem[]; staffId?: number; covers?: number; note?: string; customerId?: number; type?: 'dine-in' | 'takeaway' | 'delivery' }) => Promise<IPCResponse<{ orderId: number; itemsToPrint: CartItem[] }>>;
+    create: (payload: { tableId?: number | null; staffId?: number; covers?: number; note?: string; customerId?: number; type?: 'dine-in' | 'takeaway' | 'delivery' }) => Promise<IPCResponse<{ id: number; order_number: string }>>;
+    addItems: (payload: { orderId: number; items: OrderLineInput[]; staffId?: number }) => Promise<IPCResponse<{ added: number; order: unknown }>>;
+    updateItemQty: (payload: { orderId: number; orderItemId: number; qty: number }) => Promise<IPCResponse<unknown>>;
+    updateItemNote: (payload: { orderId: number; orderItemId: number; note: string | null }) => Promise<IPCResponse<unknown>>;
+    voidItem: (payload: { orderId: number; orderItemId: number; reason?: string }) => Promise<IPCResponse<unknown>>;
+    getOpen: () => Promise<IPCResponse<unknown[]>>;
+    getById: (payload: { orderId: number }) => Promise<IPCResponse<(Order & { items: OrderItem[] }) | null>>;
+    getByTable: (payload: { tableId: number }) => Promise<IPCResponse<(Order & { items: OrderItem[]; customer_name?: string | null }) | null>>;
+    sendKOT: (payload: { orderId: number; staffId?: number }) => Promise<IPCResponse<SendKOTResult>>;
+    updateStatus: (payload: { orderId: number; status: string; reason?: string }) => Promise<IPCResponse<unknown>>;
+    updateType: (payload: { orderId: number; type: 'dine-in' | 'takeaway' | 'delivery'; deliveryAddress?: string | null }) => Promise<IPCResponse<unknown>>;
+    applyDiscount: (payload: { orderId: number; discount: { type: 'PERCENT' | 'FIXED' | null; percent: number; minor: number } }) => Promise<IPCResponse<unknown>>;
+    changeTable: (payload: { orderId: number; tableId: number }) => Promise<IPCResponse<unknown>>;
     cancelOrder: (payload: { orderId: number; note?: string }) => Promise<IPCResponse<unknown>>;
-    cancelOrderItem: (payload: { orderId: number; orderItemId: number; note: string }) => Promise<IPCResponse<unknown>>;
     updateCustomer: (payload: { orderId: number; customerId: number }) => Promise<IPCResponse<unknown>>;
   };
   kds: {
-    getActiveTickets: () => Promise<IPCResponse<KDSTicket[]>>;
-    updateItemStatus: (payload: { itemId: number; status: 'pending' | 'preparing' | 'ready' | 'served' }) => Promise<IPCResponse<unknown>>;
-    updateOrderStatus: (payload: { orderId: number; status: 'pending' | 'preparing' | 'ready' | 'served' }) => Promise<IPCResponse<unknown>>;
+    getActiveTickets: (payload?: { since?: string }) => Promise<IPCResponse<KDSTicket[]>>;
+    updateItemStatus: (payload: { itemId: number; status: KDSItemStatus }) => Promise<IPCResponse<unknown>>;
+    updateKotStatus: (payload: { kotId: number; status: KDSOrderStatus }) => Promise<IPCResponse<unknown>>;
+    updateOrderStatus: (payload: { orderId: number; status: KDSOrderStatus }) => Promise<IPCResponse<unknown>>;
   };
   menu: {
     getMenus: () => Promise<IPCResponse<import('../types/models').Menu[]>>;
@@ -266,7 +339,7 @@ export const api = (ipcApi ?? mockApi) as {
     duplicateMenu: (payload: { id: number; newName: string }) => Promise<IPCResponse<{ id: number }>>;
     uploadImage: () => Promise<IPCResponse<string>>;
     getAll: (menuId?: number) => Promise<IPCResponse<(Category & { items: MenuItem[] })[]>>;
-    upsertItem: (payload: Partial<MenuItem>) => Promise<IPCResponse<MenuItem>>;
+    upsertItem: (payload: Partial<MenuItem>) => Promise<IPCResponse<{ id: number }>>;
     deleteItem: (payload: { id: number }) => Promise<IPCResponse<unknown>>;
     toggleAvailable: (payload: { id: number; is_available: number }) => Promise<IPCResponse<unknown>>;
     upsertCategory: (payload: Partial<Category>) => Promise<IPCResponse<Category>>;
@@ -327,6 +400,10 @@ export const api = (ipcApi ?? mockApi) as {
       list: (limit?: number) => Promise<IPCResponse<unknown[]>>;
     };
   };
+  payments: {
+    updateStatus: (payload: { paymentId: number; status: string; providerReference?: string; failureReason?: string; metadata?: Record<string, unknown> }) => Promise<IPCResponse<unknown>>;
+    verify: (payload: { paymentId: number }) => Promise<IPCResponse<unknown>>;
+  };
   billing: {
     createBill: (payload: unknown) => Promise<IPCResponse<unknown>>;
     getBill: (payload: unknown) => Promise<IPCResponse<unknown>>;
@@ -337,13 +414,32 @@ export const api = (ipcApi ?? mockApi) as {
   };
   inventory: {
     getAll: () => Promise<IPCResponse<InventoryItem[]>>;
-    adjust: (payload: { item_id: number; type: 'purchase' | 'sale' | 'adjustment' | 'wastage'; qty_change: number; note?: string; }) => Promise<IPCResponse<unknown>>;
+    getLowStock: () => Promise<IPCResponse<unknown[]>>;
+    getMovements: (payload?: { itemId?: number; limit?: number }) => Promise<IPCResponse<unknown[]>>;
+    convert: (payload: { value: number; from: string; to: string }) => Promise<IPCResponse<number>>;
+    adjust: (payload: { item_id: number; type: 'purchase' | 'sale' | 'adjustment' | 'wastage' | 'return' | 'correction'; qty_change: number; note?: string; }) => Promise<IPCResponse<unknown>>;
     upsertItem: (payload: Partial<InventoryItem>) => Promise<IPCResponse<{ id: number }>>;
+    updateRecipe: (payload: { menuItemId: number; ingredients: { inventory_item_id: number; qty_used: number }[] }) => Promise<IPCResponse<unknown>>;
+  };
+  suppliers: {
+    list: (payload?: { includeInactive?: boolean }) => Promise<IPCResponse<Supplier[]>>;
+    save: (payload: { id?: number; name: string; phone?: string | null; email?: string | null; address?: string | null; notes?: string | null; is_active?: number | boolean }) => Promise<IPCResponse<{ id: number }>>;
+  };
+  purchases: {
+    list: (payload?: { supplierId?: number; limit?: number }) => Promise<IPCResponse<Purchase[]>>;
+    items: (payload: { purchaseId: number }) => Promise<IPCResponse<PurchaseItem[]>>;
+    create: (payload: { supplier_id: number; items: { inventory_item_id: number; qty: number; unit_cost: number | string }[]; note?: string | null }) => Promise<IPCResponse<{ id: number; purchase_number: string }>>;
+    receive: (payload: { purchaseId: number }) => Promise<IPCResponse<unknown>>;
+    cancel: (payload: { purchaseId: number }) => Promise<IPCResponse<unknown>>;
+  };
+  audit: {
+    list: (payload?: { entityType?: string; action?: string; limit?: number }) => Promise<IPCResponse<unknown[]>>;
   };
   staff: {
     login: (payload: { pin: string }) => Promise<IPCResponse<{ id: number; name: string; role: string }>>;
+    logout: () => Promise<IPCResponse<unknown>>;
     getAll: () => Promise<IPCResponse<Staff[]>>;
-    upsert: (payload: Partial<Staff>) => Promise<IPCResponse<{ id: number }>>;
+    upsert: (payload: Partial<Staff> & { pin: string }) => Promise<IPCResponse<{ id: number }>>;
     delete: (payload: { id: number }) => Promise<IPCResponse<unknown>>;
     changePin: (payload: { id: number, currentPin: string, newPin: string }) => Promise<IPCResponse<unknown>>;
   };
@@ -351,10 +447,21 @@ export const api = (ipcApi ?? mockApi) as {
     getActive: () => Promise<IPCResponse<Shift | null>>;
     open: (payload: { staffId: number; openingCash: number }) => Promise<IPCResponse<{ id: number }>>;
     close: (payload: { shiftId: number; closingCash: number; note?: string }) => Promise<IPCResponse<unknown>>;
-    getTotals: (payload: { openedAt: string }) => Promise<IPCResponse<{ cash: number; card: number; jazzcash: number; easypaisa: number; bank_transfer: number; other: number }>>;
+    getTotals: (payload: { openedAt: string }) => Promise<IPCResponse<{ cash: number; card: number; jazzcash: number; easypaisa: number; bank_transfer: number; other: number; unpaid?: number }>>;
+    list: (payload?: { limit?: number }) => Promise<IPCResponse<unknown[]>>;
+    addCashEntry: (payload: { shiftId: number; type: 'CASH_IN' | 'CASH_OUT'; amount: number | string; note?: string }) => Promise<IPCResponse<unknown>>;
+    getCashEntries: (payload: { shiftId: number }) => Promise<IPCResponse<unknown[]>>;
   };
   reports: {
-    daily: (payload: unknown) => Promise<IPCResponse<unknown>>;
+    daily: (payload: { filter: string; start?: string; end?: string }) => Promise<IPCResponse<{ date: string; totalOrders: number; totalRevenue: number; totalTax: number; totalServiceCharge: number; hourlyData: { hour: string; orders: number; revenue: number }[] }>>;
+    sales: (payload: unknown) => Promise<IPCResponse<unknown>>;
+    products: (payload: unknown) => Promise<IPCResponse<unknown>>;
+    categories: (payload: unknown) => Promise<IPCResponse<unknown>>;
+    modifiers: (payload: unknown) => Promise<IPCResponse<unknown>>;
+    tables: (payload: unknown) => Promise<IPCResponse<unknown>>;
+    kitchen: (payload: unknown) => Promise<IPCResponse<unknown>>;
+    inventory: (payload?: unknown) => Promise<IPCResponse<unknown>>;
+    expenses: (payload: unknown) => Promise<IPCResponse<unknown>>;
     gst: (payload: unknown) => Promise<IPCResponse<unknown>>;
     tax: () => Promise<IPCResponse<unknown>>;
     getPastOrders: (payload: { filter: 'daily' | 'weekly' | 'monthly' | 'yearly'; page: number; limit: number }) => Promise<IPCResponse<{ stats: import('../types/models').PastOrderStats; orders: import('../types/models').PastOrderData[]; totalPages: number; currentPage: number }>>;
@@ -382,14 +489,15 @@ export const api = (ipcApi ?? mockApi) as {
   };
   expenses: {
     getAll: (payload?: { start?: string, end?: string }) => Promise<IPCResponse<Expense[]>>;
-    create: (payload: { date: string, category: string, amount: number, description?: string, staff_id?: number }) => Promise<IPCResponse<{id: number}>>;
+    getCategories: () => Promise<IPCResponse<unknown[]>>;
+    create: (payload: { date: string, category: string, amount: number, description?: string, staff_id?: number, payment_method?: string }) => Promise<IPCResponse<{ id: number }>>;
     delete: (payload: { id: number }) => Promise<IPCResponse<unknown>>;
   };
   customers: {
     getAll: () => Promise<IPCResponse<import('../types/models').Customer[]>>;
     getById: (id: number) => Promise<IPCResponse<import('../types/models').Customer>>;
-    create: (payload: Partial<import('../types/models').Customer>) => Promise<IPCResponse<{id: number}>>;
-    update: (payload: Partial<import('../types/models').Customer> & {id: number}) => Promise<IPCResponse<unknown>>;
+    create: (payload: Partial<import('../types/models').Customer>) => Promise<IPCResponse<{ id: number }>>;
+    update: (payload: Partial<import('../types/models').Customer> & { id: number }) => Promise<IPCResponse<unknown>>;
     delete: (payload: number) => Promise<IPCResponse<unknown>>;
     search: (payload: string) => Promise<IPCResponse<import('../types/models').Customer[]>>;
     settleBalance: (payload: { customerId: number; amount: number; method: string }) => Promise<IPCResponse<unknown>>;
@@ -401,17 +509,33 @@ export const api = (ipcApi ?? mockApi) as {
         totalSales: number;
         totalOrders: number;
         averageOrderValue: number;
-        totalCustomers: number;
+        totalCovers: number;
         outstandingBalances: number;
+        cash: number;
+        card: number;
+        jazzcash: number;
+        easypaisa: number;
+        bank_transfer: number;
+        other: number;
+        unpaid: number;
+        openTables: number;
+        kitchenPendingKots: number;
+        completedOrdersToday: number;
+        lowStockCount: number;
       };
-      trendData: { label: string; sales: number }[];
-      topItemsData: { name: string; quantity: number }[];
+      trendData: { label: string; sales: number; orders: number }[];
+      topItemsData: { name: string; quantity: number; revenue: number }[];
+      lowStock: unknown[];
+      recentOrders: unknown[];
     }>>;
   };
   businessSession: {
     getActive: () => Promise<IPCResponse<BusinessSession | null>>;
     start: (payload: { staffId: number; notes?: string }) => Promise<IPCResponse<BusinessSession>>;
     close: (payload: { sessionId: number; staffId: number; notes?: string }) => Promise<IPCResponse<unknown>>;
+  };
+  auth: {
+    check: (payload: { permission: string }) => Promise<IPCResponse<boolean>>;
   };
   onBackupReminder: (callback: () => void) => void;
   onMenuScheduleTriggered: (callback: (data: { menuId: number; menuName: string; action: 'enabled' | 'disabled' }) => void) => void;

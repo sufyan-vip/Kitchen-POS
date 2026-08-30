@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { BrowserWindow } from 'electron';
 import { formatCurrency } from './money';
 
@@ -46,7 +45,8 @@ interface OutletSettings {
 const hiddenWindows = new Set<BrowserWindow>();
 
 function escapeHtml(value: unknown): string {
-  return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] as string));
+  const text = typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? String(value) : '';
+  return text.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] as string));
 }
 
 async function printHtml(htmlContent: string): Promise<void> {

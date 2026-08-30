@@ -1,152 +1,137 @@
 import { ipcMain } from 'electron';
 import { getDB } from '../db';
+import { getOrderById, getOrderItems, updateItemPreparationStatus, updateKOTStatus, updateOrderKDSStatus } from '../services/order-service';
+import { KDSStatus } from '../services/pricing';
+import { assertCurrentPermission } from '../services/authz';
 
-interface KDSTicketItem {
+interface KDSItem {
   id: number;
-  menu_item_id: number;
   name: string;
   qty: number;
   note: string | null;
-  preparation_status: 'pending' | 'preparing' | 'ready' | 'served';
+  variant_name: string | null;
+  modifier_snapshot: string | null;
+  preparation_status: string;
   prepared_at: string | null;
   served_at: string | null;
 }
 
 interface KDSTicket {
+  kot_id: number;
+  kot_number: number;
+  kot_type: 'MAIN' | 'ADDITIONAL';
+  kot_status: string;
+  kot_created_at: string;
   order_id: number;
-  table_id: number;
-  table_name: string;
+  order_number: string;
+  order_status: string;
+  order_kds_status: string;
+  table_id: number | null;
+  table_name: string | null;
   order_note: string | null;
   type: 'dine-in' | 'takeaway' | 'delivery';
   created_at: string;
-  updated_at: string;
-  items: KDSTicketItem[];
+  items: KDSItem[];
+}
+
+function fetchTickets(since?: string): KDSTicket[] {
+  const db = getDB();
+  const params: unknown[] = [];
+  let sinceClause = '';
+  if (since) {
+    sinceClause = 'AND (o.updated_at > ? OR k.updated_at > ?)';
+    params.push(since, since);
+  }
+  const kots = db.prepare(`
+    SELECT k.id AS kot_id, k.kot_number, k.kot_type, k.status AS kot_status, k.created_at AS kot_created_at,
+           k.table_id, k.note AS kot_note,
+           o.id AS order_id, o.order_number, o.status AS order_status, o.kds_status AS order_kds_status, o.table_id AS order_table_id,
+           o.note AS order_note, o.type, o.created_at
+    FROM kots k
+    JOIN orders o ON o.id = k.order_id
+    WHERE o.status NOT IN ('COMPLETED', 'CANCELLED') AND k.status != 'CANCELLED'
+      ${sinceClause}
+    ORDER BY k.created_at ASC, k.id ASC
+  `).all(...params) as Array<{
+    kot_id: number; kot_number: number; kot_type: 'MAIN' | 'ADDITIONAL'; kot_status: string; kot_created_at: string;
+    table_id: number | null; kot_note: string | null; order_id: number; order_number: string; order_status: string;
+    order_kds_status: string; order_table_id: number | null; order_note: string | null; type: 'dine-in' | 'takeaway' | 'delivery'; created_at: string;
+  }>;
+
+  const tickets: KDSTicket[] = [];
+  for (const kot of kots) {
+    // Table name lookup — takeaway/delivery tickets have no table and must not fail
+    let tableName: string | null = null;
+    if (kot.table_id) {
+      const tableRow = db.prepare('SELECT name FROM tables WHERE id = ?').get(kot.table_id) as { name: string } | undefined;
+      tableName = tableRow?.name ?? `Table ${kot.table_id}`;
+    }
+    const items = db.prepare(`
+      SELECT id, name, qty, note, variant_name, modifier_snapshot, preparation_status, prepared_at, served_at
+      FROM order_items
+      WHERE order_id = ? AND kot_number = ? AND preparation_status != 'served'
+      ORDER BY id
+    `).all(kot.order_id, kot.kot_number) as KDSItem[];
+    if (items.length === 0) { continue; }
+    tickets.push({
+      kot_id: kot.kot_id,
+      kot_number: kot.kot_number,
+      kot_type: kot.kot_type,
+      kot_status: kot.kot_status,
+      kot_created_at: kot.kot_created_at,
+      order_id: kot.order_id,
+      order_number: kot.order_number,
+      order_status: kot.order_status,
+      order_kds_status: kot.order_kds_status,
+      table_id: kot.table_id,
+      table_name: tableName,
+      order_note: kot.order_note ?? kot.kot_note,
+      type: kot.type,
+      created_at: kot.created_at,
+      items,
+    });
+  }
+  return tickets;
 }
 
 export function registerKDSIPC() {
-  ipcMain.handle('kds:getActiveTickets', async () => {
+  ipcMain.handle('kds:getActiveTickets', async (_event, payload?: { since?: string }) => {
     try {
-      const db = getDB();
-      // Fetch active orders that are not billed or cancelled
-      const activeOrders = db.prepare(`
-        SELECT 
-          o.id AS order_id,
-          o.table_id,
-          t.name AS table_name,
-          o.note AS order_note,
-          o.type,
-          o.created_at,
-          o.updated_at
-        FROM orders o
-        JOIN tables t ON o.table_id = t.id
-        WHERE o.status IN ('open', 'kot_sent')
-        ORDER BY o.created_at ASC
-      `).all() as Array<{
-        order_id: number;
-        table_id: number;
-        table_name: string;
-        order_note: string | null;
-        type: 'dine-in' | 'takeaway' | 'delivery';
-        created_at: string;
-        updated_at: string;
-      }>;
-
-      const tickets: KDSTicket[] = [];
-
-      for (const order of activeOrders) {
-        // Fetch active order items that are not served
-        const items = db.prepare(`
-          SELECT 
-            id,
-            menu_item_id,
-            name,
-            qty,
-            note,
-            preparation_status,
-            prepared_at,
-            served_at
-          FROM order_items
-          WHERE order_id = ? AND preparation_status != 'served'
-        `).all(order.order_id) as KDSTicketItem[];
-
-        if (items.length > 0) {
-          tickets.push({
-            ...order,
-            items,
-          });
-        }
-      }
-
-      return { success: true, data: tickets };
+      assertCurrentPermission('kot_view');
+      return { success: true, data: fetchTickets(payload?.since) };
     } catch (e: unknown) {
-      if (e instanceof Error) { return { success: false, error: e.message }; }
-      return { success: false, error: 'Unknown error occurred' };
+      return { success: false, error: e instanceof Error ? e.message : 'Unknown KDS error' };
     }
   });
 
-  ipcMain.handle('kds:updateItemStatus', async (_, payload: { itemId: number; status: 'pending' | 'preparing' | 'ready' | 'served' }) => {
+  ipcMain.handle('kds:updateItemStatus', async (_event, payload: { itemId: number; status: 'pending' | 'preparing' | 'ready' | 'served' }) => {
     try {
-      const db = getDB();
-      const status = payload.status;
-      const itemId = payload.itemId;
-
-      if (status === 'ready') {
-        db.prepare(`
-          UPDATE order_items 
-          SET preparation_status = ?, prepared_at = CURRENT_TIMESTAMP 
-          WHERE id = ?
-        `).run(status, itemId);
-      } else if (status === 'served') {
-        db.prepare(`
-          UPDATE order_items 
-          SET preparation_status = ?, served_at = CURRENT_TIMESTAMP 
-          WHERE id = ?
-        `).run(status, itemId);
-      } else {
-        db.prepare(`
-          UPDATE order_items 
-          SET preparation_status = ?, prepared_at = NULL, served_at = NULL 
-          WHERE id = ?
-        `).run(status, itemId);
-      }
-
-      return { success: true };
+      const order = updateItemPreparationStatus(payload.itemId, payload.status);
+      return { success: true, data: { order } };
     } catch (e: unknown) {
-      if (e instanceof Error) { return { success: false, error: e.message }; }
-      return { success: false, error: 'Unknown error occurred' };
+      return { success: false, error: e instanceof Error ? e.message : 'Unknown KDS error' };
     }
   });
 
-  ipcMain.handle('kds:updateOrderStatus', async (_, payload: { orderId: number; status: 'pending' | 'preparing' | 'ready' | 'served' }) => {
+  // KOT-level status (NEW / PREPARING / READY / COMPLETED / CANCELLED)
+  ipcMain.handle('kds:updateKotStatus', async (_event, payload: { kotId: number; status: KDSStatus }) => {
     try {
-      const db = getDB();
-      const status = payload.status;
-      const orderId = payload.orderId;
-
-      if (status === 'ready') {
-        db.prepare(`
-          UPDATE order_items 
-          SET preparation_status = ?, prepared_at = CURRENT_TIMESTAMP 
-          WHERE order_id = ? AND preparation_status != 'served'
-        `).run(status, orderId);
-      } else if (status === 'served') {
-        db.prepare(`
-          UPDATE order_items 
-          SET preparation_status = ?, served_at = CURRENT_TIMESTAMP 
-          WHERE order_id = ? AND preparation_status != 'served'
-        `).run(status, orderId);
-      } else {
-        db.prepare(`
-          UPDATE order_items 
-          SET preparation_status = ?, prepared_at = NULL, served_at = NULL 
-          WHERE order_id = ? AND preparation_status != 'served'
-        `).run(status, orderId);
-      }
-
-      return { success: true };
+      const { kot, order } = updateKOTStatus(payload.kotId, payload.status);
+      return { success: true, data: { kot, order } };
     } catch (e: unknown) {
-      if (e instanceof Error) { return { success: false, error: e.message }; }
-      return { success: false, error: 'Unknown error occurred' };
+      return { success: false, error: e instanceof Error ? e.message : 'Unknown KDS error' };
+    }
+  });
+
+  // Legacy order-level bump — kept for compatibility
+  ipcMain.handle('kds:updateOrderStatus', async (_event, payload: { orderId: number; status: KDSStatus }) => {
+    try {
+      const order = updateOrderKDSStatus(payload.orderId, payload.status);
+      return { success: true, data: { order } };
+    } catch (e: unknown) {
+      return { success: false, error: e instanceof Error ? e.message : 'Unknown KDS error' };
     }
   });
 }
+
+export { getOrderById, getOrderItems };

@@ -54,13 +54,13 @@ const MenuPage: React.FC = () => {
   }, [activeMenuId]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void fetchMenus();
+    const timer = setTimeout(() => { void fetchMenus(); }, 0);
+    return () => { clearTimeout(timer); };
   }, [fetchMenus]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void fetchCategories();
+    const timer = setTimeout(() => { void fetchCategories(); }, 0);
+    return () => { clearTimeout(timer); };
   }, [fetchCategories]);
 
   const activeCategoryId = selectedCategoryId ?? categories[0]?.id;

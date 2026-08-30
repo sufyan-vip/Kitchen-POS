@@ -26,6 +26,7 @@ const OrderPage: React.FC = () => {
   const [createdAt, setCreatedAt] = useState<string | null>(null);
   const [orderType, setOrderType] = useState<'dine-in' | 'takeaway' | 'delivery'>(Number(tableId) === 0 ? 'takeaway' : 'dine-in');
   const [occupiedTime, setOccupiedTime] = useState<string>('');
+  const [sending, setSending] = useState(false);
   const { activeSession } = useBusinessSession();
   const { showModal, hideModal } = useModal();
   const { showToast } = useToast();
@@ -194,13 +195,13 @@ const OrderPage: React.FC = () => {
       await api.orders.updateCustomer({ orderId, customerId: selected.id });
     } else if (tableId) {
       const res = await api.orders.create({
-        tableId: Number(tableId),
+        tableId: Number(tableId) === 0 ? null : Number(tableId),
         staffId: staff?.id,
         customerId: selected.id,
         type: orderType,
       });
       if (res.success && res.data) {
-        setOrderId(res.data);
+        setOrderId(res.data.id);
         setCreatedAt(new Date().toISOString());
         showToast({ message: `Table reserved for ${selected.name}`, variant: 'success' });
       }
@@ -231,7 +232,7 @@ const OrderPage: React.FC = () => {
       title: 'Void Item',
       content: <CancelOrderModal onConfirm={(note) => { 
         hideModal();
-        api.orders.cancelOrderItem({ orderId, orderItemId, note })
+        api.orders.voidItem({ orderId, orderItemId, reason: note })
           .then(res => {
             if (res.success) {
               showToast({ message: 'Item cancelled successfully', variant: 'success' });
@@ -270,7 +271,7 @@ const OrderPage: React.FC = () => {
   };
 
   const handleSendKOT = async (shouldPrint: boolean) => {
-    if ((unsentItems.length === 0 && !orderId) || !tableId) {
+    if (unsentItems.length === 0 || sending) {
       return;
     }
 
@@ -279,24 +280,65 @@ const OrderPage: React.FC = () => {
       return;
     }
 
-    const res = await api.orders.sendKOT({
-      tableId: Number(tableId),
-      items: unsentItems,
-      staffId: staff?.id,
-      customerId: customer?.id,
-      type: orderType,
-    });
-    if (res.success && res.data) {
-      if (shouldPrint) {
-        if (res.data.itemsToPrint.length > 0) {
-          api.print.kot({ items: res.data.itemsToPrint, tableName: `Table ${tableId}`, orderNote: '' }).catch(console.error);
-        } else {
-          showToast({ message: 'No new items to print.', variant: 'warning' });
+    setSending(true);
+    try {
+      // 1. Create the order on first submission (tableId 0 = takeaway/delivery).
+      let currentOrderId = orderId;
+      if (!currentOrderId) {
+        const createRes = await api.orders.create({
+          tableId: Number(tableId) === 0 ? null : Number(tableId),
+          staffId: staff?.id,
+          customerId: customer?.id,
+          type: orderType,
+        });
+        if (!createRes.success || !createRes.data) {
+          showToast({ message: createRes.error ?? 'Failed to create order', variant: 'error' });
+          return;
         }
+        currentOrderId = createRes.data.id;
+        setOrderId(currentOrderId);
+        setCreatedAt(new Date().toISOString());
+      }
+
+      // 2. Add the cart lines — the backend prices them authoritatively.
+      const addRes = await api.orders.addItems({
+        orderId: currentOrderId,
+        items: unsentItems.map(item => ({
+          menu_item_id: item.id,
+          qty: item.qty,
+          note: item.note.trim() || null,
+        })),
+        staffId: staff?.id,
+      });
+      if (!addRes.success) {
+        showToast({ message: addRes.error ?? 'Failed to save items', variant: 'error' });
+        return;
+      }
+
+      // 3. Send the new items to the kitchen (KOT).
+      const kotRes = await api.orders.sendKOT({ orderId: currentOrderId, staffId: staff?.id });
+      if (!kotRes.success || !kotRes.data) {
+        showToast({ message: kotRes.error ?? 'Failed to send KOT', variant: 'error' });
+        return;
+      }
+
+      if (shouldPrint && kotRes.data.items.length > 0) {
+        let tableLabel = `Table ${tableId}`;
+        if (Number(tableId) === 0) { tableLabel = orderType === 'delivery' ? 'Delivery' : 'Takeaway'; }
+        api.print.kot({
+          items: kotRes.data.items.map(i => ({ name: i.name, qty: i.qty })),
+          tableName: tableLabel,
+          orderNote: '',
+        }).catch(console.error);
       } else {
         showToast({ message: 'Order saved successfully.', variant: 'success' });
       }
+      setUnsentItems([]);
       navigate('/tables');
+    } catch (e: unknown) {
+      showToast({ message: `Error: ${e instanceof Error ? e.message : String(e)}`, variant: 'error' });
+    } finally {
+      setSending(false);
     }
   };
 

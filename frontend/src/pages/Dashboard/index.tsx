@@ -102,7 +102,7 @@ const DashboardPage: React.FC = () => {
     totalSales: 0,
     totalOrders: 0,
     averageOrderValue: 0,
-    totalCustomers: 0,
+    totalCovers: 0,
     outstandingBalances: 0,
     cash: 0,
     card: 0,
@@ -110,8 +110,8 @@ const DashboardPage: React.FC = () => {
     easypaisa: 0,
     bank_transfer: 0,
     openTables: 0,
-    kitchenPendingOrders: 0,
-    lowStockItems: 0
+    kitchenPendingKots: 0,
+    lowStockCount: 0
   });
   const [trendData, setTrendData] = useState<{ label: string; sales: number; orders: number }[]>([]);
   const [topItemsData, setTopItemsData] = useState<{ name: string; quantity: number }[]>([]);
@@ -144,7 +144,7 @@ const DashboardPage: React.FC = () => {
   }, []);
 
   const { setHeader } = useHeader();
-  
+
   useEffect(() => {
     setHeader(
       'Dashboard',
@@ -155,8 +155,8 @@ const DashboardPage: React.FC = () => {
             variant="ghost"
             onClick={() => { handleFilterChange(f.value); }}
             className={
-              filter === f.value 
-                ? 'bg-blue-50 text-blue-700 shadow-sm hover:bg-blue-100 hover:text-blue-800' 
+              filter === f.value
+                ? 'bg-blue-50 text-blue-700 shadow-sm hover:bg-blue-100 hover:text-blue-800'
                 : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
             }
           >
@@ -179,33 +179,33 @@ const DashboardPage: React.FC = () => {
         <>
           {/* Metrics Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <KPICard 
-              title="Total Sales" 
-              value={`Rs ${Math.round(metrics.totalSales)}`} 
+            <KPICard
+              title="Total Sales"
+              value={`Rs ${Math.round(metrics.totalSales)}`}
               icon={<SvgIcon name="indian-rupee" width={24} height={24} />}
               colorTheme="blue"
             />
-            <KPICard 
-              title="Orders" 
-              value={metrics.totalOrders} 
+            <KPICard
+              title="Orders"
+              value={metrics.totalOrders}
               icon={<SvgIcon name="cart" width={24} height={24} />}
               colorTheme="green"
             />
-            <KPICard 
-              title="Avg Order Value" 
-              value={`Rs ${Math.round(metrics.averageOrderValue)}`} 
+            <KPICard
+              title="Avg Order Value"
+              value={`Rs ${Math.round(metrics.averageOrderValue)}`}
               icon={<SvgIcon name="trend-up" width={24} height={24} />}
               colorTheme="purple"
             />
-            <KPICard 
-              title="Customers" 
-              value={metrics.totalCustomers} 
+            <KPICard
+              title="Total Covers"
+              value={metrics.totalCovers}
               icon={<SvgIcon name="users" width={24} height={24} />}
               colorTheme="orange"
             />
-            <KPICard 
-              title="Balances" 
-              value={`Rs ${Math.round(metrics.outstandingBalances)}`} 
+            <KPICard
+              title="Balances"
+              value={`Rs ${Math.round(metrics.outstandingBalances)}`}
               icon={<SvgIcon name="wallet" width={24} height={24} />}
               colorTheme="blue"
             />
@@ -218,8 +218,8 @@ const DashboardPage: React.FC = () => {
             <KPICard title="Easypaisa" value={`Rs ${Math.round(metrics.easypaisa)}`} icon={<SvgIcon name="wallet" width={20} height={20} />} colorTheme="purple" />
             <KPICard title="Bank Transfer" value={`Rs ${Math.round(metrics.bank_transfer)}`} icon={<SvgIcon name="wallet" width={20} height={20} />} colorTheme="blue" />
             <KPICard title="Open Tables" value={metrics.openTables} icon={<SvgIcon name="table" width={20} height={20} />} colorTheme="orange" />
-            <KPICard title="Kitchen Pending" value={metrics.kitchenPendingOrders} icon={<SvgIcon name="chef-hat" width={20} height={20} />} colorTheme="purple" />
-            <KPICard title="Low Stock" value={metrics.lowStockItems} icon={<SvgIcon name="alert-triangle" width={20} height={20} />} colorTheme="orange" />
+            <KPICard title="Kitchen Pending" value={metrics.kitchenPendingKots} icon={<SvgIcon name="chef-hat" width={20} height={20} />} colorTheme="purple" />
+            <KPICard title="Low Stock" value={metrics.lowStockCount} icon={<SvgIcon name="alert-triangle" width={20} height={20} />} colorTheme="orange" />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -228,14 +228,14 @@ const DashboardPage: React.FC = () => {
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Sales Trend</CardTitle>
                 <div className="flex bg-gray-100 p-1 rounded-lg">
-                  <button 
-                    onClick={() => { setSalesChartType('line'); }} 
+                  <button
+                    onClick={() => { setSalesChartType('line'); }}
                     className={`px-3 py-1 text-sm rounded-md transition-colors ${salesChartType === 'line' ? 'bg-white shadow-sm text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-900'}`}
                   >
                     Line
                   </button>
-                  <button 
-                    onClick={() => { setSalesChartType('bar'); }} 
+                  <button
+                    onClick={() => { setSalesChartType('bar'); }}
                     className={`px-3 py-1 text-sm rounded-md transition-colors ${salesChartType === 'bar' ? 'bg-white shadow-sm text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-900'}`}
                   >
                     Bar
@@ -251,10 +251,10 @@ const DashboardPage: React.FC = () => {
                         <XAxis dataKey="label" tickFormatter={formatDateLabelShort} />
                         <YAxis tickFormatter={(val: number) => `Rs ${val}`} />
                         <Tooltip content={<CustomTooltip />} />
-                        <Line 
-                          type="monotone" 
-                          dataKey="sales" 
-                          stroke="#2563eb" 
+                        <Line
+                          type="monotone"
+                          dataKey="sales"
+                          stroke="#2563eb"
                           strokeWidth={3}
                           dot={{ r: 4, strokeWidth: 2 }}
                           activeDot={{ r: 6 }}
@@ -266,9 +266,9 @@ const DashboardPage: React.FC = () => {
                         <XAxis dataKey="label" tickFormatter={formatDateLabelShort} />
                         <YAxis tickFormatter={(val: number) => `Rs ${val}`} />
                         <Tooltip content={<CustomTooltip />} />
-                        <Bar 
-                          dataKey="sales" 
-                          fill="#2563eb" 
+                        <Bar
+                          dataKey="sales"
+                          fill="#2563eb"
                           radius={[4, 4, 0, 0]}
                         />
                       </BarChart>

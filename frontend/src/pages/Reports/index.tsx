@@ -11,8 +11,8 @@ interface DailyReport {
   date: string;
   totalOrders: number;
   totalRevenue: number;
-  totalCTax: number;
-  totalSTax: number;
+  totalTax: number;
+  totalServiceCharge: number;
   hourlyData: { hour: string; orders: number; revenue: number }[];
 }
 
@@ -88,7 +88,7 @@ const ReportsPage: React.FC = () => {
     api.reports.daily(payload)
       .then(res => {
         if (active && res.success && res.data) {
-          setReport(res.data as DailyReport);
+          setReport(res.data);
         }
       })
       .catch((err: unknown) => {
@@ -100,8 +100,8 @@ const ReportsPage: React.FC = () => {
   const handleExportCSV = useCallback(async () => {
     if (!report) { return; }
     const csvContent = "data:text/csv;charset=utf-8," 
-      + "Filter,Total Orders,Total Revenue,CTax,STax\n"
-      + `${filter},${report.totalOrders},${report.totalRevenue},${report.totalCTax},${report.totalSTax}`;
+      + "Filter,Total Orders,Total Revenue,Total Tax,Service Charge\n"
+      + `${filter},${report.totalOrders},${report.totalRevenue},${report.totalTax},${report.totalServiceCharge}`;
     
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -201,8 +201,8 @@ const ReportsPage: React.FC = () => {
               colorTheme="green"
             />
             <KPICard
-              title="Total CTax"
-              value={`Rs ${Math.round(report.totalCTax)}`}
+              title="Total Tax"
+              value={`Rs ${Math.round(report.totalTax)}`}
               icon={<SvgIcon name="percent" width={24} height={24} />}
               trend={2.1}
               trendLabel="vs last period"
@@ -210,8 +210,8 @@ const ReportsPage: React.FC = () => {
               colorTheme="purple"
             />
             <KPICard
-              title="Total STax"
-              value={`Rs ${Math.round(report.totalSTax)}`}
+              title="Service Charge"
+              value={`Rs ${Math.round(report.totalServiceCharge)}`}
               icon={<SvgIcon name="percent" width={24} height={24} />}
               trend={2.1}
               trendLabel="vs last period"

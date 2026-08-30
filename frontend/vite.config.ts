@@ -1,10 +1,42 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import type { Plugin } from "vite";
+
+/**
+ * Inject a strict Content-Security-Policy into the production bundle only.
+ * Dev mode is left untouched so Vite HMR and the React refresh preamble work.
+ * The policy allows only same-origin scripts; inline styles, data/blob/local
+ * images and websockets are permitted for the offline-first desktop app.
+ */
+function productionCsp(): Plugin {
+  const csp = [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: file: local:",
+    "font-src 'self' data:",
+    "connect-src 'self' ws: wss:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+  return {
+    name: "inject-production-csp",
+    apply: "build",
+    transformIndexHtml(html) {
+      return html.replace(
+        '<meta charset="UTF-8" />',
+        `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${csp}" />`,
+      );
+    },
+  };
+}
 
 export default defineConfig(() => {
   return {
     base: "./",
-    plugins: [react()],
+    plugins: [react(), productionCsp()],
     server: {
       port: 5205,
       host: "0.0.0.0",

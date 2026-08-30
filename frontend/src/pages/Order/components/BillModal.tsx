@@ -1,5 +1,5 @@
 import { Button, Input, Select } from '../../../components/atoms';
-import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, forwardRef, useImperativeHandle, type ReactNode } from 'react';
 import { api } from '../../../lib/ipc';
 import { CartItem, Customer } from '../../../types/models';
 import { useToast } from '../../../hooks/useToast';
@@ -17,59 +17,108 @@ export interface BillModalHandle {
   print: () => void;
 }
 
+/**
+ * Authoritative settlement numbers come from the backend order row
+ * (recalculated by the order service); the client never derives the bill
+ * total from the cart. Cart-derived figures are previews only.
+ */
+interface AuthoritativeOrder {
+  id: number;
+  status: string;
+  subtotal_minor: number;
+  tax_minor: number;
+  service_charge_minor: number;
+  delivery_charge_minor: number;
+  discount_minor: number;
+  total_minor: number;
+  total_paid_minor: number;
+  items: Array<{
+    id: number;
+    name: string;
+    qty: number;
+    line_total_minor: number | null;
+    unit_price_minor: number | null;
+    variant_name: string | null;
+    modifier_snapshot: string | null;
+    note: string | null;
+  }>;
+}
+
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/** Convert rupee input to integer paisa, matching the backend's toMinorUnits. */
+function toMinor(rupees: number): number {
+  return Math.round((Number.isFinite(rupees) ? rupees : 0) * 100);
 }
 
 const BillModal = forwardRef<BillModalHandle, Props>(({ orderId, cart, initialCustomer, onClose }, ref) => {
   const { showToast } = useToast();
 
-  const taxableTotal = round2(cart.reduce((sum, item) => sum + item.price * item.qty, 0));
+  const [order, setOrder] = useState<AuthoritativeOrder | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [discount, setDiscount] = useState(0);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(initialCustomer ?? null);
   const [payments, setPayments] = useState<{ method: string; amount: number }[]>([]);
-  const [taxSettings, setTaxSettings] = useState({ enabled: false, name: 'Sales Tax', rate: 0, serviceChargeRate: 0, deliveryCharge: 0 });
+  const [taxName, setTaxName] = useState('Sales Tax');
+
+  useEffect(() => {
+    let active = true;
+    void api.orders.getById({ orderId }).then(res => {
+      if (!active) { return; }
+      if (res.success && res.data) {
+        setOrder(res.data as unknown as AuthoritativeOrder);
+      } else {
+        setLoadError(res.error ?? 'Could not load order totals');
+      }
+    }).catch(() => {
+      if (active) { setLoadError('Could not load order totals'); }
+    });
+    return () => { active = false; };
+  }, [orderId]);
 
   useEffect(() => {
     void api.settings.get().then(res => {
       if (res.success && res.data) {
         const data = res.data as Record<string, unknown>;
-        setTaxSettings({
-          enabled: Boolean(data.tax_enabled),
-          name: typeof data.tax_name === 'string' ? data.tax_name : 'Sales Tax',
-          rate: Number(data.tax_rate ?? 0),
-          serviceChargeRate: Number(data.service_charge_rate ?? 0),
-          deliveryCharge: Number(data.delivery_charge ?? 0),
-        });
+        setTaxName(typeof data.tax_name === 'string' ? data.tax_name : 'Sales Tax');
       }
     });
   }, []);
 
-  const totalAfterDiscount = round2(Math.max(0, taxableTotal - discount));
-  const taxTotal = taxSettings.enabled ? round2(totalAfterDiscount * (taxSettings.rate / 100)) : 0;
-  const serviceChargeTotal = taxSettings.serviceChargeRate > 0 ? round2(totalAfterDiscount * (taxSettings.serviceChargeRate / 100)) : 0;
-  const deliveryChargeTotal = round2(taxSettings.deliveryCharge);
-  const finalTotal = round2(totalAfterDiscount + taxTotal + serviceChargeTotal + deliveryChargeTotal);
+  // ── Authoritative totals (integer paisa from the backend order row) ──────
+  const subtotalMinor = order?.subtotal_minor ?? 0;
+  const taxMinor = order?.tax_minor ?? 0;
+  const serviceChargeMinor = order?.service_charge_minor ?? 0;
+  const deliveryChargeMinor = order?.delivery_charge_minor ?? 0;
+  const baseTotalMinor = order?.total_minor ?? 0; // includes any stored discount
+  const paidMinor = order?.total_paid_minor ?? 0;
+
+  // Bill-time discount: FIXED rupees (mirrors backend billing.createBill:
+  // discountMinor = toMinorUnits(value); total = max(0, total_minor - discountMinor))
+  const discountMinor = toMinor(discount);
+  const grandTotalMinor = Math.max(0, baseTotalMinor - discountMinor);
+  const remainingMinor = Math.max(0, grandTotalMinor - paidMinor);
+
+  const currentPaymentsMinor = toMinor(payments.reduce((sum, p) => sum + (p.amount || 0), 0));
+  const isBalanced = currentPaymentsMinor === remainingMinor;
 
   useEffect(() => {
-    setPayments([{ method: 'cash', amount: finalTotal }]);
-  // Only reset payments when the final total changes due to cart/discount changes.
-   
-  }, [finalTotal]);
-
-  const currentPaymentsTotal = round2(payments.reduce((sum, p) => sum + (p.amount || 0), 0));
-  const isBalanced = Math.abs(currentPaymentsTotal - finalTotal) < 0.01;
+    setPayments([{ method: 'cash', amount: round2(remainingMinor / 100) }]);
+  }, [remainingMinor]);
 
   const handlePaymentChange = (index: number, field: string, value: string | number) => {
     setPayments(prev => prev.map((p, i) => i === index ? { ...p, [field]: value } : p));
   };
 
   const handleConfirm = async (shouldPrint: boolean) => {
+    if (!order) { return; }
     if (!isBalanced) {
-      showToast({ message: 'Payments must balance the grand total', variant: 'warning' });
+      showToast({ message: 'Payments must balance the remaining total', variant: 'warning' });
       return;
     }
-    const unpaidAmount = payments.filter(p => p.method === 'unpaid').reduce((sum, p) => sum + p.amount, 0);
+    const unpaidAmount = payments.filter(p => p.method === 'unpaid').reduce((sum, p) => sum + (p.amount || 0), 0);
     if (unpaidAmount > 0) {
       if (!selectedCustomer) {
         showToast({ message: 'Please select a customer for unpaid balance', variant: 'warning' });
@@ -107,31 +156,41 @@ const BillModal = forwardRef<BillModalHandle, Props>(({ orderId, cart, initialCu
     print: () => { void handleConfirm(true); },
   }));
 
-  return (
-    <div className="flex-1 overflow-auto p-6 flex flex-col md:flex-row gap-8">
-      {/* Left Side - Itemized Breakdown */}
-      <div className="flex-1">
-        <h3 className="font-bold text-gray-700 border-b pb-2 mb-4">Itemised Breakdown</h3>
+  let breakdownLines: Array<{ key: string; name: string; qty: number; lineMinor: number }>;
+  if (order && order.items.length > 0) {
+    breakdownLines = order.items.map(item => {
+      const unitMinor = item.unit_price_minor ?? 0;
+      return { key: `oi-${item.id}`, name: item.name, qty: item.qty, lineMinor: item.line_total_minor ?? unitMinor * item.qty };
+    });
+  } else {
+    breakdownLines = cart.map(item => ({ key: `cart-${item.id}`, name: item.name, qty: item.qty, lineMinor: Math.round(item.price * item.qty * 100) }));
+  }
+
+  let breakdownBody: ReactNode;
+  if (loadError) {
+    breakdownBody = (
+      <div className="text-red-600 text-sm py-4">
+        {loadError} — billing is disabled until totals can be verified with the server.
+      </div>
+    );
+  } else if (!order) {
+    breakdownBody = <div className="text-gray-500 py-4 text-sm">Loading authoritative totals…</div>;
+  } else {
+    breakdownBody = (
+      <>
         <div className="space-y-3 mb-6">
-          {cart.map(item => {
-            const base = round2(item.price * item.qty);
-            const c = taxSettings.enabled ? round2(base * (taxSettings.rate / 100)) : 0;
-            return (
-              <div key={item.id} className="flex justify-between text-sm">
-                <div>
-                  <p className="font-medium">{item.name} x {item.qty}</p>
-                  {taxSettings.enabled && <p className="text-xs text-gray-500">{taxSettings.name}: Rs {c.toFixed(2)}</p>}
-                </div>
-                <p className="font-medium">Rs {round2(base + c).toFixed(2)}</p>
-              </div>
-            );
-          })}
+          {breakdownLines.map(line => (
+            <div key={line.key} className="flex justify-between text-sm">
+              <p className="font-medium">{line.name} x {line.qty}</p>
+              <p className="font-medium">Rs {(line.lineMinor / 100).toFixed(2)}</p>
+            </div>
+          ))}
         </div>
 
         <div className="border-t pt-3 space-y-2 text-sm">
           <div className="flex justify-between">
             <span>Taxable Amount</span>
-            <span>Rs {taxableTotal.toFixed(2)}</span>
+            <span>Rs {(subtotalMinor / 100).toFixed(2)}</span>
           </div>
           <div className="flex flex-col gap-1 my-1">
             <div className="flex justify-between items-center mt-2">
@@ -154,7 +213,7 @@ const BillModal = forwardRef<BillModalHandle, Props>(({ orderId, cart, initialCu
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => { setDiscount(round2(taxableTotal * (pct / 100))); }}
+                  onClick={() => { setDiscount(Math.round((subtotalMinor * pct) / 100) / 100); }}
                   className="!rounded-full !px-2 !py-0.5 !text-xs"
                 >
                   {pct}%
@@ -162,21 +221,39 @@ const BillModal = forwardRef<BillModalHandle, Props>(({ orderId, cart, initialCu
               ))}
             </div>
           </div>
-          {taxSettings.enabled && (
-            <>
-              <div className="flex justify-between text-gray-600">
-                <span>{taxSettings.name} ({taxSettings.rate}%)</span>
-                <span>Rs {taxTotal.toFixed(2)}</span>
-              </div>
-            </>
+          {taxMinor > 0 && (
+            <div className="flex justify-between text-gray-600">
+              <span>{taxName}</span>
+              <span>Rs {(taxMinor / 100).toFixed(2)}</span>
+            </div>
           )}
-          {serviceChargeTotal > 0 && <div className="flex justify-between text-gray-600"><span>Service Charge</span><span>Rs {serviceChargeTotal.toFixed(2)}</span></div>}
-          {deliveryChargeTotal > 0 && <div className="flex justify-between text-gray-600"><span>Delivery Charge</span><span>Rs {deliveryChargeTotal.toFixed(2)}</span></div>}
+          {serviceChargeMinor > 0 && <div className="flex justify-between text-gray-600"><span>Service Charge</span><span>Rs {(serviceChargeMinor / 100).toFixed(2)}</span></div>}
+          {deliveryChargeMinor > 0 && <div className="flex justify-between text-gray-600"><span>Delivery Charge</span><span>Rs {(deliveryChargeMinor / 100).toFixed(2)}</span></div>}
           <div className="flex justify-between font-bold text-lg pt-2 border-t mt-2">
             <span>Grand Total</span>
-            <span>Rs {finalTotal.toFixed(2)}</span>
+            <span>Rs {(grandTotalMinor / 100).toFixed(2)}</span>
+          </div>
+          {paidMinor > 0 && (
+            <div className="flex justify-between text-gray-600">
+              <span>Already Paid</span>
+              <span>Rs {(paidMinor / 100).toFixed(2)}</span>
+            </div>
+          )}
+          <div className="flex justify-between font-semibold">
+            <span>Remaining</span>
+            <span>Rs {(remainingMinor / 100).toFixed(2)}</span>
           </div>
         </div>
+      </>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-auto p-6 flex flex-col md:flex-row gap-8">
+      {/* Left Side - Itemized Breakdown */}
+      <div className="flex-1">
+        <h3 className="font-bold text-gray-700 border-b pb-2 mb-4">Itemised Breakdown</h3>
+        {breakdownBody}
       </div>
 
       {/* Right Side - Payment Split */}
@@ -215,7 +292,7 @@ const BillModal = forwardRef<BillModalHandle, Props>(({ orderId, cart, initialCu
                     step="0.01"
                   />
                   {p.method === 'unpaid' && (
-                    <p className="text-[10px] text-gray-500 mt-1 leading-tight">Use a negative number to log an advance/change due.</p>
+                    <p className="text-[10px] text-gray-500 mt-1 leading-tight">Amount is added to the customer's outstanding balance.</p>
                   )}
                 </div>
               </div>
@@ -234,12 +311,12 @@ const BillModal = forwardRef<BillModalHandle, Props>(({ orderId, cart, initialCu
           <div className="flex justify-between text-sm mb-1">
             <span>Tendered:</span>
             <span className={`font-bold ${!isBalanced ? 'text-red-600' : 'text-green-600'}`}>
-              Rs {currentPaymentsTotal.toFixed(2)}
+              Rs {(currentPaymentsMinor / 100).toFixed(2)}
             </span>
           </div>
           {!isBalanced && (
             <p className="text-xs text-red-500 text-right">
-              Balance due: Rs {round2(finalTotal - currentPaymentsTotal).toFixed(2)}
+              Balance due: Rs {((remainingMinor - currentPaymentsMinor) / 100).toFixed(2)}
             </p>
           )}
         </div>

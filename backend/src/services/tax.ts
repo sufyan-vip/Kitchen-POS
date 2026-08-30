@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { fromMinorUnits, toMinorUnits } from './money';
 
 export type TaxRounding = 'line' | 'bill';
@@ -61,11 +60,11 @@ export function getTaxSettings(store?: { get: (key: string, defaultValue?: unkno
     enabled: safeStore.get('tax_enabled', false) as boolean,
     name: (safeStore.get('tax_name', 'Sales Tax') as string) || 'Sales Tax',
     rate: Number(safeStore.get('tax_rate', 0) ?? 0),
-    mode: (safeStore.get('tax_mode', 'exclusive') as TaxMode) || 'exclusive',
-    rounding: (safeStore.get('tax_rounding', 'line') as TaxRounding) || 'line',
+    mode: (() => { const v = safeStore.get('tax_mode', 'exclusive'); return v === 'inclusive' || v === 'exclusive' ? v : 'exclusive'; })(),
+    rounding: (() => { const v = safeStore.get('tax_rounding', 'line'); return v === 'line' || v === 'bill' ? v : 'line'; })(),
     serviceChargeEnabled: safeStore.get('service_charge_enabled', false) as boolean,
     serviceChargeRate: Number(safeStore.get('service_charge_rate', 0) ?? 0),
-    deliveryChargeMinor: toMinorUnits(String(safeStore.get('delivery_charge', 0) ?? 0)),
+    deliveryChargeMinor: (() => { const v = safeStore.get('delivery_charge', 0); return toMinorUnits(typeof v === 'number' || typeof v === 'string' ? v : 0); })(),
   };
 }
 
@@ -97,7 +96,7 @@ export function calcBillTotals(items: OrderItem[], settings: TaxSettings = getTa
   for (const item of items) {
     const unitMinor = item.unit_price_minor ?? toMinorUnits(item.unit_price);
     const itemDiscountMinor = item.discount_minor ?? toMinorUnits(item.discount ?? 0);
-    const rate = settings.enabled ? Number(item.tax_rate ?? settings.rate ?? 0) : 0;
+    const rate = settings.enabled ? (item.tax_rate ?? settings.rate) : 0;
     const mode = (item.tax_mode ?? settings.mode);
     const line = calcLineItemTaxMinor(unitMinor, item.qty, rate, mode, itemDiscountMinor);
     taxableMinor += line.taxableMinor;
