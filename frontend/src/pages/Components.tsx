@@ -444,7 +444,7 @@ const Components: React.FC = () => {
                 { value: "de", label: "Germany" },
                 { value: "fr", label: "France" },
                 { value: "jp", label: "Japan" },
-                { value: "in", label: "India" },
+                { value: "pk", label: "Pakistan" },
                 { value: "cn", label: "China" },
               ]}
               onChange={() => {}}
@@ -478,7 +478,7 @@ const Components: React.FC = () => {
               <option value="de">Germany</option>
               <option value="fr">France</option>
               <option value="jp">Japan</option>
-              <option value="in">India</option>
+              <option value="pk">Pakistan</option>
             </Select>
             <Select label="Error State" error="Please select an option">
               <option value="">Choose...</option>

@@ -175,7 +175,7 @@ export default function InventoryPage() {
                       <span className="text-gray-500 text-sm ml-1">{item.unit}</span>
                     </td>
                     <td className="py-3 px-4 text-right text-gray-600">
-                      ₹{item.cost_per_unit.toFixed(2)}
+                      Rs {item.cost_per_unit.toFixed(2)}
                     </td>
                     <td className="py-3 px-4 text-center">
                       {isLowStock ? (

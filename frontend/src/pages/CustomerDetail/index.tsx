@@ -129,7 +129,7 @@ const CustomerDetailPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Credit Limit (₹)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Credit Limit (Rs )</label>
               <Input 
                 type="number"
                 min="0"

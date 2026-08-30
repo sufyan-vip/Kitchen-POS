@@ -8,8 +8,10 @@ import { useToast } from '../../../hooks/useToast';
 interface PaymentTotals {
   cash: number;
   card: number;
-  upi: number;
-  complimentary: number;
+  jazzcash: number;
+  easypaisa: number;
+  bank_transfer: number;
+  other: number;
 }
 
 interface Props {
@@ -60,7 +62,7 @@ const CloseShiftModal: React.FC<Props> = ({ onSuccess }) => {
   }
 
   const expectedCash = activeShift.opening_cash + (totals?.cash ?? 0);
-  const totalNonCash = (totals?.card ?? 0) + (totals?.upi ?? 0) + (totals?.complimentary ?? 0);
+  const totalNonCash = (totals?.card ?? 0) + (totals?.jazzcash ?? 0) + (totals?.easypaisa ?? 0) + (totals?.bank_transfer ?? 0) + (totals?.other ?? 0);
   const cashVal = typeof closingCash === 'number' ? closingCash : 0;
 
   const handleSubmit = (e: React.SyntheticEvent) => {
@@ -76,7 +78,7 @@ const CloseShiftModal: React.FC<Props> = ({ onSuccess }) => {
     const discrepancy = cashVal - expectedCash;
     let finalNote = note.trim();
     if (discrepancy !== 0) {
-      const discrepancyMsg = `[Discrepancy: ₹${discrepancy.toFixed(2)}]`;
+      const discrepancyMsg = `[Discrepancy: Rs ${discrepancy.toFixed(2)}]`;
       finalNote = finalNote ? `${discrepancyMsg} ${finalNote}` : discrepancyMsg;
     }
 
@@ -116,11 +118,11 @@ const CloseShiftModal: React.FC<Props> = ({ onSuccess }) => {
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-gray-50 p-3.5 border rounded-lg">
               <span className="text-xs text-gray-500 font-bold block uppercase tracking-wide">Starting Cash</span>
-              <span className="text-lg font-bold text-gray-900">₹{activeShift.opening_cash.toFixed(2)}</span>
+              <span className="text-lg font-bold text-gray-900">Rs {activeShift.opening_cash.toFixed(2)}</span>
             </div>
             <div className="bg-gray-50 p-3.5 border rounded-lg">
               <span className="text-xs text-gray-500 font-bold block uppercase tracking-wide">Expected Cash</span>
-              <span className="text-lg font-bold text-gray-900">₹{expectedCash.toFixed(2)}</span>
+              <span className="text-lg font-bold text-gray-900">Rs {expectedCash.toFixed(2)}</span>
             </div>
           </div>
 
@@ -136,23 +138,31 @@ const CloseShiftModal: React.FC<Props> = ({ onSuccess }) => {
                 <tbody className="divide-y text-gray-700">
                   <tr>
                     <td className="py-2 px-3">Cash Sales</td>
-                    <td className="py-2 px-3 text-right font-mono">₹{totals.cash.toFixed(2)}</td>
+                    <td className="py-2 px-3 text-right font-mono">Rs {totals.cash.toFixed(2)}</td>
                   </tr>
                   <tr>
                     <td className="py-2 px-3">Card Sales</td>
-                    <td className="py-2 px-3 text-right font-mono">₹{totals.card.toFixed(2)}</td>
+                    <td className="py-2 px-3 text-right font-mono">Rs {totals.card.toFixed(2)}</td>
                   </tr>
                   <tr>
-                    <td className="py-2 px-3">UPI Sales</td>
-                    <td className="py-2 px-3 text-right font-mono">₹{totals.upi.toFixed(2)}</td>
+                    <td className="py-2 px-3">JazzCash Sales</td>
+                    <td className="py-2 px-3 text-right font-mono">Rs {totals.jazzcash.toFixed(2)}</td>
                   </tr>
                   <tr>
-                    <td className="py-2 px-3">Complimentary</td>
-                    <td className="py-2 px-3 text-right font-mono">₹{totals.complimentary.toFixed(2)}</td>
+                    <td className="py-2 px-3">Easypaisa Sales</td>
+                    <td className="py-2 px-3 text-right font-mono">Rs {totals.easypaisa.toFixed(2)}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2 px-3">Bank Transfer</td>
+                    <td className="py-2 px-3 text-right font-mono">Rs {totals.bank_transfer.toFixed(2)}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2 px-3">Other</td>
+                    <td className="py-2 px-3 text-right font-mono">Rs {totals.other.toFixed(2)}</td>
                   </tr>
                   <tr className="bg-gray-50/50 font-bold">
                     <td className="py-2.5 px-3 text-gray-800">Total Non-Cash</td>
-                    <td className="py-2.5 px-3 text-right text-gray-800 font-mono">₹{totalNonCash.toFixed(2)}</td>
+                    <td className="py-2.5 px-3 text-right text-gray-800 font-mono">Rs {totalNonCash.toFixed(2)}</td>
                   </tr>
                 </tbody>
               </table>
@@ -161,7 +171,7 @@ const CloseShiftModal: React.FC<Props> = ({ onSuccess }) => {
 
           <div>
             <Input
-              label="Counted Cash in Drawer (₹)"
+              label="Counted Cash in Drawer (Rs )"
               type="number"
               min="0"
               step="0.01"
@@ -176,7 +186,7 @@ const CloseShiftModal: React.FC<Props> = ({ onSuccess }) => {
               <p className={`text-xs font-semibold mt-1.5 ${cashVal === expectedCash ? 'text-green-600' : 'text-amber-600'}`}>
                 {cashVal === expectedCash 
                   ? '✓ Cash drawer matches expected amount' 
-                  : `⚠️ Discrepancy: ₹${(cashVal - expectedCash).toFixed(2)}`
+                  : `⚠️ Discrepancy: Rs ${(cashVal - expectedCash).toFixed(2)}`
                 }
               </p>
             )}

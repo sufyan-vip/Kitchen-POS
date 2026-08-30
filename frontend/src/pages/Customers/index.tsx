@@ -137,10 +137,10 @@ const CustomersPage: React.FC = () => {
                   <div className="text-sm text-gray-500">{c.email ?? 'No email'}</div>
                 </td>
                 <td className="p-4">{c.phone ?? '-'}</td>
-                <td className="p-4 text-right">₹{c.credit_limit.toFixed(2)}</td>
+                <td className="p-4 text-right">Rs {c.credit_limit.toFixed(2)}</td>
                 <td className="p-4 text-right">
                   <span className={c.outstanding_balance > 0 ? 'text-red-600 font-bold' : 'text-green-600'}>
-                    ₹{c.outstanding_balance.toFixed(2)}
+                    Rs {c.outstanding_balance.toFixed(2)}
                   </span>
                 </td>
                 <td className="p-4 text-right space-x-2">

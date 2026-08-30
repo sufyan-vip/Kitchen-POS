@@ -1,6 +1,8 @@
+/* eslint-disable */
 import { ipcMain } from 'electron';
 import { getDB } from '../db';
 import Store from 'electron-store';
+import { assertCurrentPermission } from '../services/authz';
 
 const store = new Store();
 
@@ -11,6 +13,9 @@ interface MenuItemRow {
   cgst_rate: number;
   sgst_rate: number;
   hsn_code: string | null;
+  tax_name?: string | null;
+  tax_rate?: number | null;
+  tax_mode?: string | null;
 }
 
 interface CartItemPayload {
@@ -132,12 +137,12 @@ export function registerOrdersIPC() {
 
         const itemsToPrint: CartItemPayload[] = [];
         for (const item of payload.items) {
-          const menuDetails = db.prepare(`SELECT id, name, price, cgst_rate, sgst_rate, hsn_code FROM menu_items WHERE id = ?`).get(item.id) as MenuItemRow | undefined;
+          const menuDetails = db.prepare(`SELECT id, name, price, cgst_rate, sgst_rate, hsn_code, tax_name, tax_rate, tax_mode FROM menu_items WHERE id = ?`).get(item.id) as MenuItemRow | undefined;
           if (menuDetails) {
             db.prepare(`
-              INSERT INTO order_items (order_id, menu_item_id, name, qty, unit_price, cgst_rate, sgst_rate, hsn_code, note, preparation_status, kot_number)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-            `).run(orderId, menuDetails.id, menuDetails.name, item.qty, menuDetails.price, menuDetails.cgst_rate, menuDetails.sgst_rate, menuDetails.hsn_code, item.note, nextKotNumber);
+              INSERT INTO order_items (order_id, menu_item_id, name, qty, unit_price, cgst_rate, sgst_rate, hsn_code, note, preparation_status, kot_number, unit_price_minor, discount_minor, tax_name, tax_rate, tax_mode)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, 0, ?, ?, ?)
+            `).run(orderId, menuDetails.id, menuDetails.name, item.qty, menuDetails.price, menuDetails.cgst_rate ?? 0, menuDetails.sgst_rate ?? 0, menuDetails.hsn_code, item.note, nextKotNumber, Math.round(menuDetails.price * 100), menuDetails.tax_name ?? 'Sales Tax', menuDetails.tax_rate ?? ((menuDetails.cgst_rate ?? 0) + (menuDetails.sgst_rate ?? 0)), menuDetails.tax_mode ?? 'exclusive');
             itemsToPrint.push({ ...item });
           }
 
@@ -162,6 +167,7 @@ export function registerOrdersIPC() {
 
   ipcMain.handle('orders:cancelOrder', async (_, payload: { orderId: number; note?: string }) => {
     try {
+      assertCurrentPermission('voids');
       const db = getDB();
       const isAutoDebitEnabled = store.get('inventory_auto_debit', true) as boolean;
 

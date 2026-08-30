@@ -39,7 +39,7 @@ export const CustomerSelect: React.FC<CustomerSelectProps> = ({
       <div className={`bg-white border rounded p-2 text-sm flex justify-between items-center ${className}`}>
         <div>
           <p className="font-bold">{selectedCustomer.name}</p>
-          <p className="text-xs text-gray-500">Limit: ₹{selectedCustomer.credit_limit}</p>
+          <p className="text-xs text-gray-500">Limit: Rs {selectedCustomer.credit_limit}</p>
         </div>
         <Button 
           size="icon" 

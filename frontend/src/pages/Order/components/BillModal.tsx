@@ -28,20 +28,28 @@ const BillModal = forwardRef<BillModalHandle, Props>(({ orderId, cart, initialCu
   const [discount, setDiscount] = useState(0);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(initialCustomer ?? null);
   const [payments, setPayments] = useState<{ method: string; amount: number }[]>([]);
-  const [isGstEnabled, setIsGstEnabled] = useState(true);
+  const [taxSettings, setTaxSettings] = useState({ enabled: false, name: 'Sales Tax', rate: 0, serviceChargeRate: 0, deliveryCharge: 0 });
 
   useEffect(() => {
     void api.settings.get().then(res => {
-      if (res.success && res.data && typeof (res.data as Record<string, unknown>).is_gst_enabled === 'boolean') {
-        setIsGstEnabled((res.data as Record<string, unknown>).is_gst_enabled as boolean);
+      if (res.success && res.data) {
+        const data = res.data as Record<string, unknown>;
+        setTaxSettings({
+          enabled: Boolean(data.tax_enabled),
+          name: typeof data.tax_name === 'string' ? data.tax_name : 'Sales Tax',
+          rate: Number(data.tax_rate ?? 0),
+          serviceChargeRate: Number(data.service_charge_rate ?? 0),
+          deliveryCharge: Number(data.delivery_charge ?? 0),
+        });
       }
     });
   }, []);
 
   const totalAfterDiscount = round2(Math.max(0, taxableTotal - discount));
-  const cgstTotal = isGstEnabled ? round2(totalAfterDiscount * 0.025) : 0;
-  const sgstTotal = isGstEnabled ? round2(totalAfterDiscount * 0.025) : 0;
-  const finalTotal = round2(totalAfterDiscount + cgstTotal + sgstTotal);
+  const taxTotal = taxSettings.enabled ? round2(totalAfterDiscount * (taxSettings.rate / 100)) : 0;
+  const serviceChargeTotal = taxSettings.serviceChargeRate > 0 ? round2(totalAfterDiscount * (taxSettings.serviceChargeRate / 100)) : 0;
+  const deliveryChargeTotal = round2(taxSettings.deliveryCharge);
+  const finalTotal = round2(totalAfterDiscount + taxTotal + serviceChargeTotal + deliveryChargeTotal);
 
   useEffect(() => {
     setPayments([{ method: 'cash', amount: finalTotal }]);
@@ -107,15 +115,14 @@ const BillModal = forwardRef<BillModalHandle, Props>(({ orderId, cart, initialCu
         <div className="space-y-3 mb-6">
           {cart.map(item => {
             const base = round2(item.price * item.qty);
-            const c = isGstEnabled ? round2(base * 0.025) : 0;
-            const s = isGstEnabled ? round2(base * 0.025) : 0;
+            const c = taxSettings.enabled ? round2(base * (taxSettings.rate / 100)) : 0;
             return (
               <div key={item.id} className="flex justify-between text-sm">
                 <div>
                   <p className="font-medium">{item.name} x {item.qty}</p>
-                  {isGstEnabled && <p className="text-xs text-gray-500">CGST: ₹{c.toFixed(2)} | SGST: ₹{s.toFixed(2)}</p>}
+                  {taxSettings.enabled && <p className="text-xs text-gray-500">{taxSettings.name}: Rs {c.toFixed(2)}</p>}
                 </div>
-                <p className="font-medium">₹{round2(base + c + s).toFixed(2)}</p>
+                <p className="font-medium">Rs {round2(base + c).toFixed(2)}</p>
               </div>
             );
           })}
@@ -124,7 +131,7 @@ const BillModal = forwardRef<BillModalHandle, Props>(({ orderId, cart, initialCu
         <div className="border-t pt-3 space-y-2 text-sm">
           <div className="flex justify-between">
             <span>Taxable Amount</span>
-            <span>₹{taxableTotal.toFixed(2)}</span>
+            <span>Rs {taxableTotal.toFixed(2)}</span>
           </div>
           <div className="flex flex-col gap-1 my-1">
             <div className="flex justify-between items-center mt-2">
@@ -155,21 +162,19 @@ const BillModal = forwardRef<BillModalHandle, Props>(({ orderId, cart, initialCu
               ))}
             </div>
           </div>
-          {isGstEnabled && (
+          {taxSettings.enabled && (
             <>
               <div className="flex justify-between text-gray-600">
-                <span>CGST (2.5%)</span>
-                <span>₹{cgstTotal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-gray-600">
-                <span>SGST (2.5%)</span>
-                <span>₹{sgstTotal.toFixed(2)}</span>
+                <span>{taxSettings.name} ({taxSettings.rate}%)</span>
+                <span>Rs {taxTotal.toFixed(2)}</span>
               </div>
             </>
           )}
+          {serviceChargeTotal > 0 && <div className="flex justify-between text-gray-600"><span>Service Charge</span><span>Rs {serviceChargeTotal.toFixed(2)}</span></div>}
+          {deliveryChargeTotal > 0 && <div className="flex justify-between text-gray-600"><span>Delivery Charge</span><span>Rs {deliveryChargeTotal.toFixed(2)}</span></div>}
           <div className="flex justify-between font-bold text-lg pt-2 border-t mt-2">
             <span>Grand Total</span>
-            <span>₹{finalTotal.toFixed(2)}</span>
+            <span>Rs {finalTotal.toFixed(2)}</span>
           </div>
         </div>
       </div>
@@ -193,8 +198,10 @@ const BillModal = forwardRef<BillModalHandle, Props>(({ orderId, cart, initialCu
                   <Select value={p.method} onChange={(e) => { handlePaymentChange(i, 'method', e.target.value); }}>
                     <option value="cash">Cash</option>
                     <option value="card">Card</option>
-                    <option value="upi">UPI</option>
-                    <option value="complimentary">Complimentary</option>
+                    <option value="jazzcash">JazzCash</option>
+                    <option value="easypaisa">Easypaisa</option>
+                    <option value="bank_transfer">Bank Transfer</option>
+                    <option value="other">Other</option>
                     <option value="unpaid">Unpaid Balance</option>
                   </Select>
                 </div>
@@ -227,12 +234,12 @@ const BillModal = forwardRef<BillModalHandle, Props>(({ orderId, cart, initialCu
           <div className="flex justify-between text-sm mb-1">
             <span>Tendered:</span>
             <span className={`font-bold ${!isBalanced ? 'text-red-600' : 'text-green-600'}`}>
-              ₹{currentPaymentsTotal.toFixed(2)}
+              Rs {currentPaymentsTotal.toFixed(2)}
             </span>
           </div>
           {!isBalanced && (
             <p className="text-xs text-red-500 text-right">
-              Balance due: ₹{round2(finalTotal - currentPaymentsTotal).toFixed(2)}
+              Balance due: Rs {round2(finalTotal - currentPaymentsTotal).toFixed(2)}
             </p>
           )}
         </div>

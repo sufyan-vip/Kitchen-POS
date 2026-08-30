@@ -127,7 +127,7 @@ const ExpensesPage: React.FC = () => {
         </div>
         <div className="ml-auto bg-blue-50 px-4 py-2 rounded-lg border border-blue-100">
           <p className="text-sm font-medium text-blue-800">Total Expenses</p>
-          <p className="text-2xl font-bold text-blue-900">₹{totalAmount.toFixed(2)}</p>
+          <p className="text-2xl font-bold text-blue-900">Rs {totalAmount.toFixed(2)}</p>
         </div>
       </Card>
 
@@ -169,7 +169,7 @@ const ExpensesPage: React.FC = () => {
                         </div>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-gray-900 font-medium text-right">₹{expense.amount.toFixed(2)}</td>
+                    <td className="px-6 py-4 text-gray-900 font-medium text-right">Rs {expense.amount.toFixed(2)}</td>
                     <td className="px-6 py-4 text-right">
                       <Button 
                         variant="ghost" 

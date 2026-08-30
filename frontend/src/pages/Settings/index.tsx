@@ -12,6 +12,7 @@ const DEFAULT_AUTO_BACKUP: AutoBackupConfig = { enabled: false, frequency: 'dail
 const DEFAULT_REMINDER: BackupReminderConfig = { enabled: false, frequency: 'daily', time: '20:00', dayOfWeek: 1, dayOfMonth: 1, lastRemindedDate: null };
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const settingString = (value: unknown, fallback = '') => typeof value === 'string' || typeof value === 'number' ? String(value) : fallback;
 
 const SettingsPage: React.FC = () => {
   const activeShift = useAuthStore(state => state.activeShift);
@@ -110,7 +111,7 @@ const SettingsPage: React.FC = () => {
                 <Button variant="primary" onClick={() => { void handleBackupNow(); }} disabled={isBackingUp || isExporting || isImporting}>
                   {isBackingUp ? 'Backing up... Do not close' : 'Back Up Now'}
                 </Button>
-                <Button variant="outline" disabled={isBackingUp || isExporting || isImporting} onClick={async () => {
+                <Button variant="outline" disabled={isBackingUp || isExporting || isImporting} onClick={() => { void (async () => {
                   setIsExporting(true);
                   try {
                     const res = await api.backup.export({});
@@ -124,7 +125,7 @@ const SettingsPage: React.FC = () => {
                   } finally {
                     setIsExporting(false);
                   }
-                }}>
+                })(); }}>
                   {isExporting ? 'Exporting... Do not close' : 'Export Backup'}
                 </Button>
                 <Button variant="outline" disabled={isBackingUp || isExporting || isImporting} onClick={() => {
@@ -134,7 +135,7 @@ const SettingsPage: React.FC = () => {
                     actions: (
                       <>
                         <Button variant="secondary" onClick={hideModal}>Cancel</Button>
-                        <Button variant="danger" onClick={async () => {
+                        <Button variant="danger" onClick={() => { void (async () => {
                           hideModal();
                           setIsImporting(true);
                           try {
@@ -149,7 +150,7 @@ const SettingsPage: React.FC = () => {
                           } finally {
                             setIsImporting(false);
                           }
-                        }}>
+                        })(); }}>
                           Yes, Import
                         </Button>
                       </>
@@ -274,11 +275,18 @@ const SettingsPage: React.FC = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>Outlet Details</CardTitle>
+            <CardTitle>Restaurant Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-             <Input label="Outlet Name" placeholder="My Restaurant" />
-             <Input label="GSTIN" placeholder="22AAAAA0000A1Z5" />
+             <Input label="Restaurant Name" placeholder="Your Restaurant" value={settingString(settings.restaurant_name)} onChange={(e) => { setSettings({ ...settings, restaurant_name: e.target.value, outlet_name: e.target.value }); }} />
+             <Input label="Address" placeholder="Street address" value={settingString(settings.address)} onChange={(e) => { setSettings({ ...settings, address: e.target.value }); }} />
+             <div className="grid grid-cols-2 gap-3">
+               <Input label="City" placeholder="City" value={settingString(settings.city)} onChange={(e) => { setSettings({ ...settings, city: e.target.value }); }} />
+               <Input label="Province" placeholder="Province" value={settingString(settings.province)} onChange={(e) => { setSettings({ ...settings, province: e.target.value }); }} />
+             </div>
+             <Input label="Phone" placeholder="03XX-XXXXXXX" value={settingString(settings.phone)} onChange={(e) => { setSettings({ ...settings, phone: e.target.value }); }} />
+             <Input label="Receipt Footer" placeholder="Thank You!" value={settingString(settings.receipt_footer)} onChange={(e) => { setSettings({ ...settings, receipt_footer: e.target.value }); }} />
+             <Button variant="primary" onClick={() => { void api.settings.save(settings).then(res => { showToast({ message: res.success ? 'Restaurant settings saved' : 'Failed to save settings', variant: res.success ? 'success' : 'error' }); }); }}>Save Restaurant Details</Button>
           </CardContent>
         </Card>
 
@@ -410,26 +418,33 @@ const SettingsPage: React.FC = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>Taxes & Billing</CardTitle>
+            <CardTitle>Tax & Billing</CardTitle>
           </CardHeader>
           <CardContent>
             <Toggle
-              checked={settings.is_gst_enabled !== false}
+              checked={Boolean(settings.tax_enabled)}
               onChange={(e) => { 
-                const is_gst_enabled = e.target.checked;
-                const newSettings = { ...settings, is_gst_enabled };
+                const tax_enabled = e.target.checked;
+                const newSettings = { ...settings, tax_enabled };
                 setSettings(newSettings);
                 void api.settings.save(newSettings).then((res) => {
                   if (res.success) {
-                    showToast({ message: `GST / SGST ${is_gst_enabled ? 'enabled' : 'disabled'}`, variant: 'success' });
+                    showToast({ message: `Tax ${tax_enabled ? 'enabled' : 'disabled'}`, variant: 'success' });
                   } else {
-                    showToast({ message: 'Failed to update GST settings', variant: 'error' });
+                    showToast({ message: 'Failed to update tax settings', variant: 'error' });
                   }
                 });
               }}
-              label="Enable GST / SGST"
-              description="Calculate and show CGST and SGST on bills"
+              label="Enable configurable tax"
+              description="Calculate configured Pakistan business tax on receipts. Configure rates according to your business and province; this app does not guarantee legal compliance."
             />
+            <div className="grid grid-cols-2 gap-3 mt-4">
+              <Input label="Tax Name" placeholder="Sales Tax" value={settingString(settings.tax_name, 'Sales Tax')} onChange={(e) => { setSettings({ ...settings, tax_name: e.target.value }); }} />
+              <Input label="Tax Rate (%)" type="number" placeholder="0" value={settingString(settings.tax_rate, '0')} onChange={(e) => { setSettings({ ...settings, tax_rate: Number(e.target.value) }); }} />
+              <Input label="Service Charge (%)" type="number" placeholder="0" value={settingString(settings.service_charge_rate, '0')} onChange={(e) => { setSettings({ ...settings, service_charge_rate: Number(e.target.value), service_charge_enabled: Number(e.target.value) > 0 }); }} />
+              <Input label="Delivery Charge (PKR)" type="number" placeholder="0" value={settingString(settings.delivery_charge, '0')} onChange={(e) => { setSettings({ ...settings, delivery_charge: Number(e.target.value) }); }} />
+            </div>
+            <Button className="mt-3" variant="primary" onClick={() => { void api.settings.save(settings).then(res => { showToast({ message: res.success ? 'Tax settings saved' : 'Failed to save tax settings', variant: res.success ? 'success' : 'error' }); }); }}>Save Tax Settings</Button>
           </CardContent>
         </Card>
 

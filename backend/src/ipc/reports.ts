@@ -16,8 +16,8 @@ interface OrderRow {
 interface AggregateRow {
   total_orders: number;
   total_revenue: number;
-  total_cgst: number;
-  total_sgst: number;
+  total_tax: number;
+  total_service_charge: number;
 }
 
 interface TrendRow {
@@ -77,8 +77,8 @@ export function registerReportsIPC() {
         SELECT 
           COUNT(id) AS total_orders,
           COALESCE(SUM(total_amount), 0) AS total_revenue,
-          COALESCE(SUM(cgst_amount), 0) AS total_cgst,
-          COALESCE(SUM(sgst_amount), 0) AS total_sgst
+          COALESCE(SUM(COALESCE(tax_amount, cgst_amount + sgst_amount)), 0) AS total_tax,
+          COALESCE(SUM(COALESCE(service_charge_amount, 0)), 0) AS total_service_charge
         FROM bills
         WHERE ${dateCondition}
       `).get(...params) as AggregateRow | undefined;
@@ -107,8 +107,8 @@ export function registerReportsIPC() {
           date: filter,
           totalOrders: aggregates?.total_orders ?? 0,
           totalRevenue: aggregates?.total_revenue ?? 0,
-          totalCGST: aggregates?.total_cgst ?? 0,
-          totalSGST: aggregates?.total_sgst ?? 0,
+          totalTax: aggregates?.total_tax ?? 0,
+          totalServiceCharge: aggregates?.total_service_charge ?? 0,
           hourlyData: trendData
         }
       };
@@ -118,9 +118,24 @@ export function registerReportsIPC() {
     }
   });
 
-  ipcMain.handle('reports:gst', async () => {
-    return { success: true };
+  ipcMain.handle('reports:tax', async () => {
+    try {
+      const db = getDB();
+      const rows = db.prepare(`
+        SELECT COALESCE(tax_name, 'Tax') AS tax_name, COALESCE(tax_rate, 0) AS tax_rate,
+               COUNT(*) AS bill_count, COALESCE(SUM(COALESCE(tax_amount, cgst_amount + sgst_amount)), 0) AS tax_amount,
+               COALESCE(SUM(COALESCE(service_charge_amount, 0)), 0) AS service_charge_amount
+        FROM bills
+        GROUP BY tax_name, tax_rate
+        ORDER BY tax_name
+      `).all();
+      return { success: true, data: rows };
+    } catch (e: unknown) {
+      return { success: false, error: e instanceof Error ? e.message : 'Unknown tax report error' };
+    }
   });
+
+  ipcMain.handle('reports:gst', async () => ({ success: true, data: [], warning: 'GST report was replaced by configurable tax summary for Pakistanized installs.' }));
 
   ipcMain.handle('reports:getPastOrders', async (_, payload: { filter: 'daily' | 'weekly' | 'monthly' | 'yearly'; page: number; limit: number }) => {
     try {
@@ -227,7 +242,12 @@ export function registerReportsIPC() {
       const settings = {
         outlet_name: store.get('outlet_name') as string,
         address: store.get('address') as string,
-        gstin: store.get('gstin') as string,
+        city: store.get('city') as string,
+        province: store.get('province') as string,
+        phone: store.get('phone') as string,
+        currency: store.get('currency', 'PKR') as string,
+        tax_name: store.get('tax_name', 'Sales Tax') as string,
+        receipt_footer: store.get('receipt_footer', 'Thank You!') as string,
       };
 
       await printBill({ ...bill, date: bill.created_at }, items, settings);

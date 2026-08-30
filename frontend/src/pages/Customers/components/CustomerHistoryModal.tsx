@@ -51,7 +51,7 @@ const CustomerHistoryModal: React.FC<Props> = ({ customer }) => {
                   </span>
                 </div>
                 <div className="font-bold text-lg text-gray-800">
-                  ₹{visit.totalAmount.toFixed(2)}
+                  Rs {visit.totalAmount.toFixed(2)}
                 </div>
               </div>
               <div className="p-4">

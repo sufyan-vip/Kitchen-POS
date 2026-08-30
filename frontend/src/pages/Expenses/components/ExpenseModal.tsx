@@ -83,7 +83,7 @@ const ExpenseModal: React.FC<Omit<ExpenseModalProps, 'onClose'>> = ({ onSave }) 
       )}
       
       <Input 
-        label="Amount (₹)"
+        label="Amount (Rs )"
         type="number"
         step="0.01"
         min="0.01"

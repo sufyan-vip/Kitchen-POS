@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron';
 import { getDB } from '../db';
+import { assertCurrentPermission, setCurrentRole } from '../services/authz';
 
 export function registerStaffIPC() {
   ipcMain.handle('staff:login', async (event, payload) => {
@@ -7,6 +8,7 @@ export function registerStaffIPC() {
       const db = getDB();
       const user = db.prepare('SELECT * FROM staff WHERE pin = ? AND is_active = 1').get(payload.pin);
       if (user) {
+        setCurrentRole((user as { role?: string }).role);
         return { success: true, data: user };
       } 
         return { success: false, error: 'Invalid PIN' };
@@ -18,6 +20,7 @@ export function registerStaffIPC() {
 
   ipcMain.handle('staff:getAll', async () => {
     try {
+      assertCurrentPermission('staff');
       const db = getDB();
       const staff = db.prepare('SELECT * FROM staff').all();
       return { success: true, data: staff };
@@ -28,6 +31,7 @@ export function registerStaffIPC() {
 
   ipcMain.handle('staff:upsert', async (event, payload: { id?: number, name: string, pin: string, role: string }) => {
     try {
+      assertCurrentPermission('staff');
       const db = getDB();
       if (payload.id) {
         const stmt = db.prepare('UPDATE staff SET name = ?, pin = ?, role = ? WHERE id = ?');
@@ -45,6 +49,7 @@ export function registerStaffIPC() {
 
   ipcMain.handle('staff:delete', async (event, payload: { id: number }) => {
     try {
+      assertCurrentPermission('staff');
       const db = getDB();
       const stmt = db.prepare('UPDATE staff SET is_active = 0 WHERE id = ?');
       const info = stmt.run(payload.id);

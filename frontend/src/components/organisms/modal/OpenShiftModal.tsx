@@ -56,7 +56,7 @@ export default function OpenShiftModal() {
 
           <div>
             <Input
-              label="Opening Float / Cash Drawer Cash (₹)"
+              label="Opening Float / Cash Drawer Cash (Rs )"
               type="number"
               min="0"
               step="0.01"

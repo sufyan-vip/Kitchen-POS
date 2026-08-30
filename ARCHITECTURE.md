@@ -529,3 +529,22 @@ publish:
 | Import overwrites live DB | Keep `.sqlite.bak`, confirm dialog before import |
 | Two staff editing same order | Reload order before every mutation, show stale-data warning |
 | Vite chunk budget exceeded | Keep organisms in `components-organisms` chunk; don't import them in atoms |
+
+---
+
+## Pakistanization addendum (2026-08-30)
+
+The original architecture above documents the inherited India/GST-oriented design. The current Pakistan-focused implementation keeps the Electron + React + SQLite architecture but layers configurable country/business-rule settings over legacy fields.
+
+Key updates:
+
+- Default country/currency/timezone are Pakistan, PKR (`Rs`), and Asia/Karachi.
+- GST/CGST/SGST/HSN/GSTIN concepts are retained only as legacy database compatibility fields; active receipts and settings use configurable tax names/rates.
+- `backend/src/services/tax.ts` performs tax calculations using integer minor units and snapshots tax name/rate/mode on orders/bills.
+- `backend/src/services/payments.ts` defines payment statuses and provider interfaces for Cash/Card/manual payments plus JazzCash/Easypaisa adapters.
+- `payments` now stores provider, method, currency, transaction/provider references, status, failure reason, metadata, and timestamps.
+- `payment_methods` stores configurable payment method defaults: Cash, Card, JazzCash, Easypaisa, Bank Transfer, Other, and Customer Credit.
+- Receipts avoid hardcoded location and use restaurant settings for name/address/city/province/phone/footer.
+- JazzCash/Easypaisa implementations intentionally avoid invented endpoints/signatures and require official merchant credentials before production activation.
+
+See `docs/PAKISTANIZATION.md` for migration and configuration details.

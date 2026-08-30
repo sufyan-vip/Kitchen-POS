@@ -83,7 +83,7 @@ const CustomTooltip = ({ active, payload, label }: TooltipProps) => {
         <div className="space-y-1 text-sm">
           <p className="flex justify-between gap-4">
             <span className="text-gray-500">Revenue:</span>
-            <span className="font-bold text-blue-600">₹{Math.round(data.sales)}</span>
+            <span className="font-bold text-blue-600">Rs {Math.round(data.sales)}</span>
           </p>
           <p className="flex justify-between gap-4">
             <span className="text-gray-500">Orders:</span>
@@ -103,7 +103,15 @@ const DashboardPage: React.FC = () => {
     totalOrders: 0,
     averageOrderValue: 0,
     totalCustomers: 0,
-    outstandingBalances: 0
+    outstandingBalances: 0,
+    cash: 0,
+    card: 0,
+    jazzcash: 0,
+    easypaisa: 0,
+    bank_transfer: 0,
+    openTables: 0,
+    kitchenPendingOrders: 0,
+    lowStockItems: 0
   });
   const [trendData, setTrendData] = useState<{ label: string; sales: number; orders: number }[]>([]);
   const [topItemsData, setTopItemsData] = useState<{ name: string; quantity: number }[]>([]);
@@ -173,49 +181,45 @@ const DashboardPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
             <KPICard 
               title="Total Sales" 
-              value={`₹${Math.round(metrics.totalSales)}`} 
+              value={`Rs ${Math.round(metrics.totalSales)}`} 
               icon={<SvgIcon name="indian-rupee" width={24} height={24} />}
-              trend={12.5}
-              trendLabel="vs last period"
-              sparklineData={[10, 25, 20, 45, 30, 50, 60]}
               colorTheme="blue"
             />
             <KPICard 
               title="Orders" 
               value={metrics.totalOrders} 
               icon={<SvgIcon name="cart" width={24} height={24} />}
-              trend={8.2}
-              trendLabel="vs last period"
-              sparklineData={[5, 10, 15, 12, 20, 18, 25]}
               colorTheme="green"
             />
             <KPICard 
               title="Avg Order Value" 
-              value={`₹${Math.round(metrics.averageOrderValue)}`} 
+              value={`Rs ${Math.round(metrics.averageOrderValue)}`} 
               icon={<SvgIcon name="trend-up" width={24} height={24} />}
-              trend={-2.4}
-              trendLabel="vs last period"
-              sparklineData={[30, 28, 25, 26, 24, 22, 20]}
               colorTheme="purple"
             />
             <KPICard 
               title="Customers" 
               value={metrics.totalCustomers} 
               icon={<SvgIcon name="users" width={24} height={24} />}
-              trend={15.0}
-              trendLabel="vs last period"
-              sparklineData={[20, 30, 40, 35, 50, 65, 80]}
               colorTheme="orange"
             />
             <KPICard 
               title="Balances" 
-              value={`₹${Math.round(metrics.outstandingBalances)}`} 
+              value={`Rs ${Math.round(metrics.outstandingBalances)}`} 
               icon={<SvgIcon name="wallet" width={24} height={24} />}
-              trend={-5.1}
-              trendLabel="vs last period"
-              sparklineData={[50, 45, 40, 35, 30, 25, 20]}
               colorTheme="blue"
             />
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+            <KPICard title="Cash" value={`Rs ${Math.round(metrics.cash)}`} icon={<SvgIcon name="wallet" width={20} height={20} />} colorTheme="green" />
+            <KPICard title="Card" value={`Rs ${Math.round(metrics.card)}`} icon={<SvgIcon name="credit-card" width={20} height={20} />} colorTheme="blue" />
+            <KPICard title="JazzCash" value={`Rs ${Math.round(metrics.jazzcash)}`} icon={<SvgIcon name="wallet" width={20} height={20} />} colorTheme="orange" />
+            <KPICard title="Easypaisa" value={`Rs ${Math.round(metrics.easypaisa)}`} icon={<SvgIcon name="wallet" width={20} height={20} />} colorTheme="purple" />
+            <KPICard title="Bank Transfer" value={`Rs ${Math.round(metrics.bank_transfer)}`} icon={<SvgIcon name="wallet" width={20} height={20} />} colorTheme="blue" />
+            <KPICard title="Open Tables" value={metrics.openTables} icon={<SvgIcon name="table" width={20} height={20} />} colorTheme="orange" />
+            <KPICard title="Kitchen Pending" value={metrics.kitchenPendingOrders} icon={<SvgIcon name="chef-hat" width={20} height={20} />} colorTheme="purple" />
+            <KPICard title="Low Stock" value={metrics.lowStockItems} icon={<SvgIcon name="alert-triangle" width={20} height={20} />} colorTheme="orange" />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -245,7 +249,7 @@ const DashboardPage: React.FC = () => {
                       <LineChart data={trendData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis dataKey="label" tickFormatter={formatDateLabelShort} />
-                        <YAxis tickFormatter={(val: number) => `₹${val}`} />
+                        <YAxis tickFormatter={(val: number) => `Rs ${val}`} />
                         <Tooltip content={<CustomTooltip />} />
                         <Line 
                           type="monotone" 
@@ -260,7 +264,7 @@ const DashboardPage: React.FC = () => {
                       <BarChart data={trendData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis dataKey="label" tickFormatter={formatDateLabelShort} />
-                        <YAxis tickFormatter={(val: number) => `₹${val}`} />
+                        <YAxis tickFormatter={(val: number) => `Rs ${val}`} />
                         <Tooltip content={<CustomTooltip />} />
                         <Bar 
                           dataKey="sales" 

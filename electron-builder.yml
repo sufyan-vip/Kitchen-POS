@@ -1,5 +1,5 @@
-appId: com.restaurantpos.app
-productName: Restaurant POS
+appId: pk.restaurantpos.kitchen
+productName: Kitchen POS Pakistan
 directories:
   output: dist-electron
 files:
@@ -12,14 +12,11 @@ extraResources:
     to: migrations
 win:
   target: nsis
-  icon: assets/icon.ico
 mac:
   target: dmg
-  icon: assets/icon.icns
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-publish:
-  provider: github
-  owner: REPLACE_WITH_GITHUB_USERNAME
-  repo: restaurant-pos
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+publish: null
