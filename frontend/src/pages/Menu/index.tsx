@@ -9,6 +9,7 @@ import MenuItemModal from './components/MenuItemModal';
 import RecipeModal from './components/RecipeModal';
 import MenuModal from './components/MenuModal';
 import CloneMenuModal from './components/CloneMenuModal';
+import Stage2MenuManager from './components/Stage2MenuManager';
 import { Card } from '../../components/atoms/card';
 import { useModal } from '../../hooks/useModal';
 
@@ -20,6 +21,7 @@ const MenuPage: React.FC = () => {
   
   const [categories, setCategories] = useState<MenuData[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [managementView, setManagementView] = useState<'core' | 'stage2'>('core');
   const { showModal, hideModal } = useModal();
 
   const fetchMenus = React.useCallback(async (selectId?: number) => {
@@ -129,6 +131,16 @@ const MenuPage: React.FC = () => {
         </div>
       </div>
 
+      <div className="w-full max-w-7xl mx-auto mb-4 flex gap-2" role="tablist" aria-label="Menu management views">
+        <Button variant={managementView === 'core' ? 'primary' : 'outline'} onClick={() => { setManagementView('core'); }} role="tab" aria-selected={managementView === 'core'}>Core menu</Button>
+        <Button variant={managementView === 'stage2' ? 'primary' : 'outline'} onClick={() => { setManagementView('stage2'); }} role="tab" aria-selected={managementView === 'stage2'}>Variants & modifiers</Button>
+      </div>
+
+      {managementView === 'stage2' ? (
+        <div className="w-full max-w-7xl mx-auto overflow-y-auto pb-8">
+          <Stage2MenuManager menuId={activeMenuId} />
+        </div>
+      ) : (
       <div className="flex w-full gap-6 max-w-7xl mx-auto h-[calc(100%-80px)]">
         {/* Left Column: Categories */}
         <Card className="w-1/3">
@@ -216,6 +228,7 @@ const MenuPage: React.FC = () => {
           )}
         </Card>
       </div>
+      )}
     </div>
   );
 };

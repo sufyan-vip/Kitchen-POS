@@ -37,6 +37,53 @@ contextBridge.exposeInMainWorld('api', {
     delete: (payload: any) => ipcRenderer.invoke('tables:delete', payload),
     updateCustomName: (payload: any) => ipcRenderer.invoke('tables:updateCustomName', payload),
   },
+  stage2: {
+    categories: {
+      list: (payload: any) => ipcRenderer.invoke('stage2:categories:list', payload),
+      save: (payload: any) => ipcRenderer.invoke('stage2:categories:save', payload),
+      deactivate: (id: number) => ipcRenderer.invoke('stage2:categories:deactivate', id),
+    },
+    menuItems: {
+      list: (payload?: any) => ipcRenderer.invoke('stage2:menu-items:list', payload),
+      save: (payload: any) => ipcRenderer.invoke('stage2:menu-items:save', payload),
+      deactivate: (id: number) => ipcRenderer.invoke('stage2:menu-items:deactivate', id),
+      setAvailability: (payload: any) => ipcRenderer.invoke('stage2:menu-items:set-availability', payload),
+    },
+    variants: {
+      list: (payload: any) => ipcRenderer.invoke('stage2:variants:list', payload),
+      save: (payload: any) => ipcRenderer.invoke('stage2:variants:save', payload),
+      deactivate: (id: number) => ipcRenderer.invoke('stage2:variants:deactivate', id),
+    },
+    modifierGroups: {
+      list: (payload?: any) => ipcRenderer.invoke('stage2:modifier-groups:list', payload),
+      save: (payload: any) => ipcRenderer.invoke('stage2:modifier-groups:save', payload),
+      deactivate: (id: number) => ipcRenderer.invoke('stage2:modifier-groups:deactivate', id),
+    },
+    modifiers: {
+      list: (payload: any) => ipcRenderer.invoke('stage2:modifiers:list', payload),
+      save: (payload: any) => ipcRenderer.invoke('stage2:modifiers:save', payload),
+      deactivate: (id: number) => ipcRenderer.invoke('stage2:modifiers:deactivate', id),
+    },
+    menuItemModifierGroups: {
+      list: (menuItemId: number) => ipcRenderer.invoke('stage2:menu-item-modifier-groups:list', menuItemId),
+      set: (payload: any) => ipcRenderer.invoke('stage2:menu-item-modifier-groups:set', payload),
+    },
+    diningAreas: {
+      list: (payload?: any) => ipcRenderer.invoke('stage2:dining-areas:list', payload),
+      save: (payload: any) => ipcRenderer.invoke('stage2:dining-areas:save', payload),
+      deactivate: (id: number) => ipcRenderer.invoke('stage2:dining-areas:deactivate', id),
+    },
+    tables: {
+      list: (payload?: any) => ipcRenderer.invoke('stage2:tables:list', payload),
+      save: (payload: any) => ipcRenderer.invoke('stage2:tables:save', payload),
+      deactivate: (id: number) => ipcRenderer.invoke('stage2:tables:deactivate', id),
+      updateStatus: (payload: any) => ipcRenderer.invoke('stage2:tables:update-status', payload),
+      updateLayout: (payload: any) => ipcRenderer.invoke('stage2:tables:update-layout', payload),
+    },
+    audit: {
+      list: (limit?: number) => ipcRenderer.invoke('stage2:audit:list', limit),
+    },
+  },
   payments: {
     updateStatus: (payload: any) => ipcRenderer.invoke('payments:updateStatus', payload),
     verify: (payload: any) => ipcRenderer.invoke('payments:verify', payload),

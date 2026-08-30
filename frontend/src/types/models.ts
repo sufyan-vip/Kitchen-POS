@@ -42,6 +42,84 @@ export interface MenuItem {
   image_url?: string | null;
 }
 
+export type Stage2TableStatus = 'AVAILABLE' | 'OCCUPIED' | 'RESERVED' | 'CLEANING' | 'DISABLED';
+export type Stage2TableShape = 'rectangle' | 'round';
+
+export interface Stage2Category extends Category {
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Stage2MenuItem extends MenuItem {
+  price_minor: number;
+  is_active: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface MenuItemVariant {
+  id: number;
+  menu_item_id: number;
+  name: string;
+  price_minor: number;
+  is_active: number;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ModifierGroup {
+  id: number;
+  name: string;
+  selection_type: 'single' | 'multiple';
+  min_selections: number;
+  max_selections: number | null;
+  is_active: number;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Modifier {
+  id: number;
+  modifier_group_id: number;
+  name: string;
+  price_minor: number;
+  is_active: number;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DiningArea {
+  id: number;
+  name: string;
+  sort_order: number;
+  is_active: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Stage2Table {
+  id: number;
+  dining_area_id: number;
+  identifier: string;
+  name: string;
+  capacity: number;
+  status: Stage2TableStatus;
+  shape: Stage2TableShape;
+  is_active: number;
+  position_x: number;
+  position_y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  section?: string;
+  custom_name?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface CartItem {
   id: number;
   orderItemId?: number;

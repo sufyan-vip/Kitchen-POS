@@ -1,4 +1,4 @@
-import { Category, MenuItem, InventoryItem, Order, OrderItem, CartItem, KDSTicket, Shift, RecipeItem, Table, Expense, Staff, BusinessSession, AutoBackupConfig, BackupReminderConfig } from '../types/models';
+import { Category, MenuItem, InventoryItem, Order, OrderItem, CartItem, KDSTicket, Shift, RecipeItem, Table, Expense, Staff, BusinessSession, AutoBackupConfig, BackupReminderConfig, Stage2Category, Stage2MenuItem, MenuItemVariant, ModifierGroup, Modifier, DiningArea, Stage2Table, Stage2TableStatus, Stage2TableShape } from '../types/models';
 
 export interface IPCResponse<T> {
   success: boolean;
@@ -72,6 +72,53 @@ const mockApi = {
     upsert: () => Promise.resolve({ success: true }),
     delete: () => Promise.resolve({ success: true }),
     updateCustomName: () => Promise.resolve({ success: true }),
+  },
+  stage2: {
+    categories: {
+      list: () => Promise.resolve({ success: true, data: [] as Stage2Category[] }),
+      save: () => Promise.resolve({ success: true, data: { id: 1 } }),
+      deactivate: () => Promise.resolve({ success: true }),
+    },
+    menuItems: {
+      list: () => Promise.resolve({ success: true, data: [] as Stage2MenuItem[] }),
+      save: () => Promise.resolve({ success: true, data: { id: 1 } }),
+      deactivate: () => Promise.resolve({ success: true }),
+      setAvailability: () => Promise.resolve({ success: true }),
+    },
+    variants: {
+      list: () => Promise.resolve({ success: true, data: [] as MenuItemVariant[] }),
+      save: () => Promise.resolve({ success: true, data: { id: 1 } }),
+      deactivate: () => Promise.resolve({ success: true }),
+    },
+    modifierGroups: {
+      list: () => Promise.resolve({ success: true, data: [] as ModifierGroup[] }),
+      save: () => Promise.resolve({ success: true, data: { id: 1 } }),
+      deactivate: () => Promise.resolve({ success: true }),
+    },
+    modifiers: {
+      list: () => Promise.resolve({ success: true, data: [] as Modifier[] }),
+      save: () => Promise.resolve({ success: true, data: { id: 1 } }),
+      deactivate: () => Promise.resolve({ success: true }),
+    },
+    menuItemModifierGroups: {
+      list: () => Promise.resolve({ success: true, data: [] as ModifierGroup[] }),
+      set: () => Promise.resolve({ success: true }),
+    },
+    diningAreas: {
+      list: () => Promise.resolve({ success: true, data: [] as DiningArea[] }),
+      save: () => Promise.resolve({ success: true, data: { id: 1 } }),
+      deactivate: () => Promise.resolve({ success: true }),
+    },
+    tables: {
+      list: () => Promise.resolve({ success: true, data: [] as Stage2Table[] }),
+      save: () => Promise.resolve({ success: true, data: { id: 1 } }),
+      deactivate: () => Promise.resolve({ success: true }),
+      updateStatus: () => Promise.resolve({ success: true }),
+      updateLayout: () => Promise.resolve({ success: true }),
+    },
+    audit: {
+      list: () => Promise.resolve({ success: true, data: [] }),
+    },
   },
   billing: {
     createBill: () => Promise.resolve({ success: true }),
@@ -232,6 +279,53 @@ export const api = (ipcApi ?? mockApi) as {
     upsert: (payload: Partial<Table>) => Promise<IPCResponse<Table>>;
     delete: (payload: { id: number }) => Promise<IPCResponse<unknown>>;
     updateCustomName: (payload: { id: number; customName: string | null }) => Promise<IPCResponse<unknown>>;
+  };
+  stage2: {
+    categories: {
+      list: (payload: { menuId: number; includeInactive?: boolean }) => Promise<IPCResponse<Stage2Category[]>>;
+      save: (payload: { id?: number; menu_id: number; name: string; sort_order?: number; is_active?: number | boolean }) => Promise<IPCResponse<{ id: number }>>;
+      deactivate: (id: number) => Promise<IPCResponse<unknown>>;
+    };
+    menuItems: {
+      list: (payload?: { categoryId?: number; search?: string; includeInactive?: boolean }) => Promise<IPCResponse<Stage2MenuItem[]>>;
+      save: (payload: { id?: number; category_id: number; name: string; price?: number | string; price_minor?: number; is_veg?: number | boolean; is_available?: number | boolean; is_active?: number | boolean; sort_order?: number; tax_name?: string | null; tax_rate?: number | null; tax_mode?: 'exclusive' | 'inclusive' | null; dietary_label?: string | null }) => Promise<IPCResponse<{ id: number }>>;
+      deactivate: (id: number) => Promise<IPCResponse<unknown>>;
+      setAvailability: (payload: { id: number; isAvailable: number | boolean }) => Promise<IPCResponse<unknown>>;
+    };
+    variants: {
+      list: (payload: { menuItemId: number; includeInactive?: boolean }) => Promise<IPCResponse<MenuItemVariant[]>>;
+      save: (payload: { id?: number; menu_item_id: number; name: string; price?: number | string; price_minor?: number; is_active?: number | boolean; sort_order?: number }) => Promise<IPCResponse<{ id: number }>>;
+      deactivate: (id: number) => Promise<IPCResponse<unknown>>;
+    };
+    modifierGroups: {
+      list: (payload?: { includeInactive?: boolean }) => Promise<IPCResponse<ModifierGroup[]>>;
+      save: (payload: { id?: number; name: string; selection_type?: 'single' | 'multiple'; min_selections?: number; max_selections?: number | null; is_active?: number | boolean; sort_order?: number }) => Promise<IPCResponse<{ id: number }>>;
+      deactivate: (id: number) => Promise<IPCResponse<unknown>>;
+    };
+    modifiers: {
+      list: (payload: { modifierGroupId: number; includeInactive?: boolean }) => Promise<IPCResponse<Modifier[]>>;
+      save: (payload: { id?: number; modifier_group_id: number; name: string; price?: number | string; price_minor?: number; is_active?: number | boolean; sort_order?: number }) => Promise<IPCResponse<{ id: number }>>;
+      deactivate: (id: number) => Promise<IPCResponse<unknown>>;
+    };
+    menuItemModifierGroups: {
+      list: (menuItemId: number) => Promise<IPCResponse<ModifierGroup[]>>;
+      set: (payload: { menuItemId: number; modifierGroupIds: number[] }) => Promise<IPCResponse<unknown>>;
+    };
+    diningAreas: {
+      list: (payload?: { includeInactive?: boolean }) => Promise<IPCResponse<DiningArea[]>>;
+      save: (payload: { id?: number; name: string; sort_order?: number; is_active?: number | boolean }) => Promise<IPCResponse<{ id: number }>>;
+      deactivate: (id: number) => Promise<IPCResponse<unknown>>;
+    };
+    tables: {
+      list: (payload?: { diningAreaId?: number; includeInactive?: boolean }) => Promise<IPCResponse<Stage2Table[]>>;
+      save: (payload: { id?: number; dining_area_id: number; identifier: string; name?: string; capacity: number; status?: Stage2TableStatus; shape?: Stage2TableShape; is_active?: number | boolean; position_x?: number; position_y?: number; width?: number; height?: number; rotation?: number }) => Promise<IPCResponse<{ id: number }>>;
+      deactivate: (id: number) => Promise<IPCResponse<unknown>>;
+      updateStatus: (payload: { id: number; status: Stage2TableStatus }) => Promise<IPCResponse<unknown>>;
+      updateLayout: (payload: { id: number; position_x?: number; position_y?: number; width?: number; height?: number; rotation?: number; shape?: Stage2TableShape }) => Promise<IPCResponse<unknown>>;
+    };
+    audit: {
+      list: (limit?: number) => Promise<IPCResponse<unknown[]>>;
+    };
   };
   billing: {
     createBill: (payload: unknown) => Promise<IPCResponse<unknown>>;
