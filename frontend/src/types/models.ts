@@ -120,6 +120,13 @@ export interface Stage2Table {
   updated_at?: string;
 }
 
+export interface CartModifierSelection {
+  id: number;
+  name: string;
+  price_minor: number;
+  qty: number;
+}
+
 export interface CartItem {
   id: number;
   orderItemId?: number;
@@ -130,6 +137,11 @@ export interface CartItem {
   status?: string;
   originalQty?: number;
   kot_number?: number;
+  variant_id?: number | null;
+  variant_name?: string | null;
+  variant_price_minor?: number | null;
+  modifiers?: CartModifierSelection[];
+  modifier_snapshot?: string | null;
 }
 
 export interface Staff {

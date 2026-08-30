@@ -8,25 +8,6 @@
     "build": "npm run build --prefix backend && npm run build --prefix frontend",
     "package": "npm run build && electron-builder"
   },
-  "build": {
-    "appId": "com.restaurant.pos",
-    "productName": "Restaurant POS",
-    "directories": {
-      "output": "dist-electron"
-    },
-    "files": [
-      "backend/dist/**/*",
-      "frontend/dist/**/*",
-      "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "backend/src/db/migrations",
-        "to": "migrations"
-      }
-    ],
-    "asar": true
-  },
   "dependencies": {
     "archiver": "^6.0.1",
     "better-sqlite3": "^9.4.3",

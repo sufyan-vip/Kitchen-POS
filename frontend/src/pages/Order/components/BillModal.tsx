@@ -60,7 +60,7 @@ const BillModal = forwardRef<BillModalHandle, Props>(({ orderId, cart, initialCu
   const [loadError, setLoadError] = useState<string | null>(null);
   const [discount, setDiscount] = useState(0);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(initialCustomer ?? null);
-  const [payments, setPayments] = useState<{ method: string; amount: number }[]>([]);
+  const [payments, setPayments] = useState<{ method: string; amount: number; status: 'PAID' | 'PENDING' }[]>([]);
   const [taxName, setTaxName] = useState('Sales Tax');
 
   useEffect(() => {
@@ -101,24 +101,37 @@ const BillModal = forwardRef<BillModalHandle, Props>(({ orderId, cart, initialCu
   const grandTotalMinor = Math.max(0, baseTotalMinor - discountMinor);
   const remainingMinor = Math.max(0, grandTotalMinor - paidMinor);
 
-  const currentPaymentsMinor = toMinor(payments.reduce((sum, p) => sum + (p.amount || 0), 0));
-  const isBalanced = currentPaymentsMinor === remainingMinor;
+  const isPendingMethod = (method: string): boolean => method === 'jazzcash' || method === 'easypaisa';
+  const settledPaymentsMinor = toMinor(payments.reduce((sum, p) => sum + (p.status === 'PAID' ? (p.amount || 0) : 0), 0));
+  const pendingPaymentsMinor = toMinor(payments.reduce((sum, p) => sum + (p.status === 'PENDING' ? (p.amount || 0) : 0), 0));
+  const isBalanced = settledPaymentsMinor === remainingMinor;
 
   useEffect(() => {
-    setPayments([{ method: 'cash', amount: round2(remainingMinor / 100) }]);
+    setPayments([{ method: 'cash', amount: round2(remainingMinor / 100), status: 'PAID' }]);
   }, [remainingMinor]);
 
   const handlePaymentChange = (index: number, field: string, value: string | number) => {
-    setPayments(prev => prev.map((p, i) => i === index ? { ...p, [field]: value } : p));
+    setPayments(prev => prev.map((p, i) => {
+      if (i !== index) { return p; }
+      const next = { ...p, [field]: value };
+      if (field === 'method') {
+        next.status = isPendingMethod(String(value)) ? 'PENDING' : 'PAID';
+      }
+      return next;
+    }));
   };
 
   const handleConfirm = async (shouldPrint: boolean) => {
     if (!order) { return; }
     if (!isBalanced) {
-      showToast({ message: 'Payments must balance the remaining total', variant: 'warning' });
+      showToast({ message: 'Settled payments must balance the remaining total', variant: 'warning' });
       return;
     }
-    const unpaidAmount = payments.filter(p => p.method === 'unpaid').reduce((sum, p) => sum + (p.amount || 0), 0);
+    if (pendingPaymentsMinor > 0 && settledPaymentsMinor < remainingMinor) {
+      showToast({ message: 'Wallet payments are pending until verified and cannot settle the balance', variant: 'warning' });
+      return;
+    }
+    const unpaidAmount = payments.filter(p => p.method === 'unpaid' && p.status === 'PAID').reduce((sum, p) => sum + (p.amount || 0), 0);
     if (unpaidAmount > 0) {
       if (!selectedCustomer) {
         showToast({ message: 'Please select a customer for unpaid balance', variant: 'warning' });
@@ -133,6 +146,11 @@ const BillModal = forwardRef<BillModalHandle, Props>(({ orderId, cart, initialCu
     try {
       const res = await api.billing.createBill({ orderId, payments, discount, customerId: selectedCustomer?.id });
       if (res.success) {
+        let paymentStatus = 'PAID';
+        if (res.data && typeof res.data === 'object') {
+          const record = res.data as Record<string, unknown>;
+          if (typeof record.payment_status === 'string') { paymentStatus = record.payment_status; }
+        }
         if (shouldPrint) {
           const mappedItems = cart.map(i => ({ name: i.name, qty: i.qty, unit_price: i.price }));
           const printRes = await api.print.bill({ bill: res.data, orderItems: mappedItems, settings: {} });
@@ -140,7 +158,11 @@ const BillModal = forwardRef<BillModalHandle, Props>(({ orderId, cart, initialCu
             showToast({ message: `Failed to print bill: ${printRes.error}`, variant: 'error' });
           }
         }
-        showToast({ message: 'Bill generated successfully', variant: 'success' });
+        if (paymentStatus === 'PAYMENT_PENDING') {
+          showToast({ message: 'Bill created — payment remains PENDING until the wallet payment is verified', variant: 'warning' });
+        } else {
+          showToast({ message: 'Bill generated successfully', variant: 'success' });
+        }
         onClose();
       } else {
         showToast({ message: res.error ?? 'Failed to generate bill', variant: 'error' });
@@ -294,6 +316,9 @@ const BillModal = forwardRef<BillModalHandle, Props>(({ orderId, cart, initialCu
                   {p.method === 'unpaid' && (
                     <p className="text-[10px] text-gray-500 mt-1 leading-tight">Amount is added to the customer's outstanding balance.</p>
                   )}
+                  {p.status === 'PENDING' && (
+                    <p className="text-[10px] text-amber-600 mt-1 leading-tight">Wallet payment is pending and does not count as settled.</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -309,14 +334,25 @@ const BillModal = forwardRef<BillModalHandle, Props>(({ orderId, cart, initialCu
 
         <div className="mt-6 pt-4 border-t">
           <div className="flex justify-between text-sm mb-1">
-            <span>Tendered:</span>
+            <span>Settled (tendered):</span>
             <span className={`font-bold ${!isBalanced ? 'text-red-600' : 'text-green-600'}`}>
-              Rs {(currentPaymentsMinor / 100).toFixed(2)}
+              Rs {(settledPaymentsMinor / 100).toFixed(2)}
             </span>
           </div>
+          {pendingPaymentsMinor > 0 && (
+            <div className="flex justify-between text-sm mb-1">
+              <span>Pending:</span>
+              <span className="font-bold text-amber-600">Rs {(pendingPaymentsMinor / 100).toFixed(2)}</span>
+            </div>
+          )}
+          {pendingPaymentsMinor > 0 && (
+            <p className="text-xs text-amber-600 text-right">
+              JazzCash/Easypaisa stay PENDING until verified — pending amounts do not settle the bill.
+            </p>
+          )}
           {!isBalanced && (
             <p className="text-xs text-red-500 text-right">
-              Balance due: Rs {((remainingMinor - currentPaymentsMinor) / 100).toFixed(2)}
+              Balance due: Rs {((remainingMinor - settledPaymentsMinor) / 100).toFixed(2)}
             </p>
           )}
         </div>

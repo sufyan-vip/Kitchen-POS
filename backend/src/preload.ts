@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('api', {
     updateItemNote: (payload: any) => ipcRenderer.invoke('orders:updateItemNote', payload),
     voidItem: (payload: any) => ipcRenderer.invoke('orders:voidItem', payload),
     getOpen: () => ipcRenderer.invoke('orders:getOpen'),
+    getDraft: () => ipcRenderer.invoke('orders:getDraft'),
+    discardDraft: (payload?: any) => ipcRenderer.invoke('orders:discardDraft', payload),
     getById: (payload: any) => ipcRenderer.invoke('orders:getById', payload),
     getByTable: (payload: any) => ipcRenderer.invoke('orders:getByTable', payload),
     sendKOT: (payload: any) => ipcRenderer.invoke('orders:sendKOT', payload),

@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import {
   addItemsToOrder, applyOrderDiscount, cancelOrder, changeOrderTable, createOrder,
-  getOpenOrders, getOrderByTable, getOrderById, sendKOT, updateOrderStatus, voidOrderItem,
+  discardDraftOrder, getLatestDraftOrder, getOpenOrders, getOrderByTable, getOrderById, getOrderItems, sendKOT, updateOrderStatus, voidOrderItem,
 } from './order-service';
 import {
   createTestDb, mockElectron, resetAuth, seedMenuWithVariantAndModifiers, seedTable, setupSettings, teardown,
@@ -34,6 +34,31 @@ describe('order lifecycle', () => {
     const b = createOrder({ tableId: null, type: 'takeaway' });
     expect(a.order_number).toBe('ORD-000001');
     expect(b.order_number).toBe('ORD-000002');
+  });
+
+  it('persists draft carts and filters them from open orders', () => {
+    const seeded = seedMenuWithVariantAndModifiers(db);
+    const draft = createOrder({ tableId: null, type: 'takeaway', status: 'DRAFT' });
+    const res = addItemsToOrder(draft.id, [{ menu_item_id: seeded.menuItemId, qty: 2, variant_id: seeded.variantId }], undefined, { keepDraft: true });
+    expect(res.order.status).toBe('DRAFT');
+    expect(res.order.subtotal_minor).toBe(3000);
+    expect(getOpenOrders()).toHaveLength(0);
+    expect(getLatestDraftOrder()?.id).toBe(draft.id);
+    // Sending a draft to the kitchen promotes it to a real order.
+    sendKOT(draft.id);
+    expect(getOrderById(draft.id)?.status).toBe('SENT_TO_KITCHEN');
+    expect(getLatestDraftOrder()).toBeNull();
+  });
+
+  it('discards a draft cart without touching other orders', () => {
+    const seeded = seedMenuWithVariantAndModifiers(db);
+    const draft = createOrder({ tableId: null, type: 'takeaway', status: 'DRAFT' });
+    const open = createOrder({ tableId: null, type: 'takeaway' });
+    addItemsToOrder(draft.id, [{ menu_item_id: seeded.menuItemId, qty: 1 }], undefined, { keepDraft: true });
+    discardDraftOrder(draft.id);
+    expect(getOrderById(draft.id)?.status).toBe('CANCELLED');
+    expect(getOrderItems(draft.id)).toHaveLength(0);
+    expect(getOpenOrders().map(o => o.id)).toContain(open.id);
   });
 
   it('prevents two active orders on the same table', () => {

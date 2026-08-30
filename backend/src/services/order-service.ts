@@ -118,8 +118,32 @@ export function getOrderItems(orderId: number): OrderItemRow[] {
 
 export function getOpenOrders(): OrderRow[] {
   return db().prepare(
-    "SELECT * FROM orders WHERE status NOT IN ('COMPLETED','CANCELLED') ORDER BY created_at"
+    "SELECT * FROM orders WHERE status NOT IN ('DRAFT','COMPLETED','CANCELLED') ORDER BY created_at"
   ).all() as OrderRow[];
+}
+
+/** Latest server-side draft cart (persistent store before the order is sent to kitchen). */
+export function getLatestDraftOrder(): OrderRow | null {
+  const order = db().prepare(
+    "SELECT * FROM orders WHERE status = 'DRAFT' ORDER BY id DESC LIMIT 1"
+  ).get() as OrderRow | undefined;
+  return order ?? null;
+}
+
+export function discardDraftOrder(orderId?: number): void {
+  assertCurrentPermission('orders_create');
+  const database = db();
+  database.transaction(() => {
+    const target = orderId
+      ? getOrderById(orderId)
+      : database.prepare("SELECT * FROM orders WHERE status = 'DRAFT' ORDER BY id DESC LIMIT 1").get() as OrderRow | undefined;
+    if (!target) { throw new Error('No draft cart found'); }
+    if (target.status !== 'DRAFT') { throw new Error('Only draft carts can be discarded'); }
+    database.prepare('DELETE FROM order_items WHERE order_id = ?').run(target.id);
+    database.prepare(`UPDATE orders SET status = 'CANCELLED', kds_status = 'CANCELLED', cancel_reason = 'Draft cart discarded', completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(target.id);
+    if (target.table_id) { releaseTable(target.table_id); }
+    writeAuditLog(database, { action: 'draft_discarded', entityType: 'order', entityId: target.id, details: { order_number: target.order_number } });
+  })();
 }
 
 export function getOrderByTable(tableId: number): OrderRow | null {
@@ -136,12 +160,14 @@ export function createOrder(input: {
   type?: 'dine-in' | 'takeaway' | 'delivery';
   covers?: number;
   note?: string;
+  status?: 'DRAFT' | 'OPEN';
 }): { id: number; order_number: string } {
   assertCurrentPermission('orders_create');
   const database = db();
   const type = input.type ?? (input.tableId ? 'dine-in' : 'takeaway');
   if (!['dine-in', 'takeaway', 'delivery'].includes(type)) { throw new Error('Invalid order type'); }
   const tableId = type === 'dine-in' ? (input.tableId ?? null) : null;
+  const initialStatus = input.status === 'DRAFT' ? 'DRAFT' : 'OPEN';
 
   return database.transaction(() => {
     if (tableId) {
@@ -155,8 +181,8 @@ export function createOrder(input: {
     const businessDate = (database.prepare("SELECT business_date FROM business_sessions WHERE status = 'open' LIMIT 1").get() as { business_date: string } | undefined)?.business_date ?? null;
     const info = database.prepare(`
       INSERT INTO orders (order_number, table_id, staff_id, customer_id, status, kds_status, type, covers, note, business_date)
-      VALUES (?, ?, ?, ?, 'OPEN', 'NEW', ?, ?, ?, ?)
-    `).run(orderNumber, tableId ?? null, input.staffId ?? null, input.customerId ?? null, type, Math.max(1, Math.trunc(input.covers ?? 1)), input.note ?? null, businessDate);
+      VALUES (?, ?, ?, ?, ?, 'NEW', ?, ?, ?, ?)
+    `).run(orderNumber, tableId ?? null, input.staffId ?? null, input.customerId ?? null, initialStatus, type, Math.max(1, Math.trunc(input.covers ?? 1)), input.note ?? null, businessDate);
     const id = Number(info.lastInsertRowid);
     if (tableId) { occupyTable(tableId); }
     writeAuditLog(database, { action: 'create', entityType: 'order', entityId: id, details: { order_number: orderNumber, type, tableId } });
@@ -175,7 +201,7 @@ function toTaxMode(value: string | null | undefined, fallback: 'exclusive' | 'in
  * Add validated lines to an order (DRAFT/OPEN only). Prices are snapshotted
  * from the menu at this moment — later menu changes never alter the order.
  */
-export function addItemsToOrder(orderId: number, lines: OrderLineInput[], _staffId?: number): { added: number; order: OrderRow } {
+export function addItemsToOrder(orderId: number, lines: OrderLineInput[], _staffId?: number, options: { keepDraft?: boolean } = {}): { added: number; order: OrderRow } {
   assertCurrentPermission('orders_create');
   const database = db();
   return database.transaction(() => {
@@ -210,7 +236,7 @@ export function addItemsToOrder(orderId: number, lines: OrderLineInput[], _staff
     }
 
     const updated = recalcOrderTotals(orderId);
-    if (updated.status === 'DRAFT') {
+    if (updated.status === 'DRAFT' && !options.keepDraft) {
       database.prepare("UPDATE orders SET status = 'OPEN', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(orderId);
     }
     const final = mustGetOrder(database, orderId);

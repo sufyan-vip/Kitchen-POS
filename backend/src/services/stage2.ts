@@ -622,7 +622,7 @@ export function updateTableLayout(input: {
 }
 
 export function listStage2AuditLogs(limit = 100): unknown[] {
-  assertCurrentPermission('menu_viewing');
+  assertCurrentPermission('audit_view');
   const database = db();
   return database.prepare(`
     SELECT id, action, entity_type, entity_id, actor_role, details, created_at

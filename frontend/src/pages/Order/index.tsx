@@ -1,9 +1,9 @@
 import { Button, Select, BackButton } from '../../components/atoms';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import MenuPanel from './components/MenuPanel';
 import CartPanel from './components/CartPanel';
-import { CartItem, MenuItem, Customer, Menu, OrderItem } from '../../types/models';
+import { CartItem, CartModifierSelection, Customer, Menu, Order, OrderItem, Table } from '../../types/models';
 import BillModal, { BillModalHandle } from './components/BillModal';
 import CancelOrderModal from './components/CancelOrderModal';
 import { api } from '../../lib/ipc';
@@ -22,7 +22,8 @@ const OrderPage: React.FC = () => {
   const [sentKOTs, setSentKOTs] = useState<{ kotNumber: number; items: CartItem[] }[]>([]);
   const [orderId, setOrderId] = useState<number | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
-  const [tableInfo, setTableInfo] = useState<import('../../types/models').Table | null>(null);
+  const [tableInfo, setTableInfo] = useState<Table | null>(null);
+  const [allTables, setAllTables] = useState<Table[]>([]);
   const [createdAt, setCreatedAt] = useState<string | null>(null);
   const [orderType, setOrderType] = useState<'dine-in' | 'takeaway' | 'delivery'>(Number(tableId) === 0 ? 'takeaway' : 'dine-in');
   const [occupiedTime, setOccupiedTime] = useState<string>('');
@@ -34,6 +35,55 @@ const OrderPage: React.FC = () => {
 
   const [menus, setMenus] = useState<Menu[]>([]);
   const [activeMenuId, setActiveMenuId] = useState<number | null>(null);
+
+  const buildCartFromOrderItem = useCallback((i: OrderItem): CartItem => {
+    let modifiers: CartModifierSelection[] = [];
+    if (i.modifier_snapshot) {
+      try {
+        const parsed = JSON.parse(i.modifier_snapshot) as Array<{ id: number; name: string; price_minor: number; qty: number }>;
+        modifiers = parsed.map(p => ({ id: p.id, name: p.name, price_minor: p.price_minor, qty: p.qty }));
+      } catch {
+        modifiers = [];
+      }
+    }
+    return {
+      id: i.menu_item_id,
+      orderItemId: i.id,
+      name: i.name,
+      price: i.unit_price,
+      qty: i.qty,
+      note: i.note ?? '',
+      status: i.preparation_status,
+      originalQty: i.qty,
+      kot_number: i.kot_number,
+      variant_id: i.variant_id,
+      variant_name: i.variant_name,
+      variant_price_minor: i.unit_price_minor,
+      modifiers: modifiers.length > 0 ? modifiers : undefined,
+      modifier_snapshot: i.modifier_snapshot ?? null,
+    };
+  }, []);
+
+  const loadOrderData = useCallback((orderData: (Order & { items: OrderItem[] })) => {
+    const items = orderData.items.map(buildCartFromOrderItem);
+    const unsent = items.filter(i => !i.kot_number);
+    const sent = items.filter(i => i.kot_number !== undefined);
+    const byKot = new Map<number, CartItem[]>();
+    for (const item of sent) {
+      const kotNum = typeof item.kot_number === 'number' ? item.kot_number : 0;
+      byKot.set(kotNum, [...(byKot.get(kotNum) ?? []), item]);
+    }
+    setUnsentItems(unsent);
+    setSentKOTs([...byKot.entries()].map(([kotNumber, kotItems]) => ({ kotNumber, items: kotItems })).sort((a, b) => b.kotNumber - a.kotNumber));
+  }, [buildCartFromOrderItem]);
+
+  const refreshOrderItems = useCallback(async (id: number) => {
+    const res = await api.orders.getById({ orderId: id });
+    if (res.success && res.data) {
+      loadOrderData(res.data);
+    }
+    return res;
+  }, [loadOrderData]);
 
   useEffect(() => {
     let active = true;
@@ -52,66 +102,49 @@ const OrderPage: React.FC = () => {
 
   useEffect(() => {
     let active = true;
-    if (tableId) {
+    const applyOrder = (orderData: (Order & { items: OrderItem[] })) => {
+      setOrderId(orderData.id);
+      setCreatedAt(orderData.created_at);
+      setOrderType(orderData.type);
+      loadOrderData(orderData);
+      if (orderData.customer_id) {
+        api.customers.getById(orderData.customer_id).then(custRes => {
+          if (active && custRes.success && custRes.data) {
+            setCustomer(custRes.data);
+          } else if (active) {
+            setCustomer({
+              id: orderData.customer_id as number,
+              name: orderData.customer_name ?? 'Unknown',
+              phone: null, email: null, loyalty_points: 0, total_visits: 0,
+              credit_limit: 0, outstanding_balance: 0, created_at: '',
+            });
+          }
+        }).catch(console.error);
+      }
+    };
+
+    if (tableId && Number(tableId) !== 0) {
       api.orders.getByTable({ tableId: Number(tableId) })
         .then(res => {
-          if (active && res.success && res.data) {
-            const orderData = res.data;
-            setOrderId(orderData.id);
-            setCreatedAt(orderData.created_at);
-            setOrderType(orderData.type);
-            if (orderData.customer_id) {
-              api.customers.getById(orderData.customer_id).then(custRes => {
-                if (active && custRes.success && custRes.data) {
-                  setCustomer(custRes.data);
-                } else if (active) {
-                  setCustomer({
-                    id: orderData.customer_id as number,
-                    name: orderData.customer_name ?? 'Unknown',
-                    phone: null, email: null, loyalty_points: 0, total_visits: 0,
-                    credit_limit: 0, outstanding_balance: 0, created_at: '',
-                  });
-                }
-              }).catch(console.error);
-            }
-            const loadedSentKots: Record<number, CartItem[]> = {};
-            
-            orderData.items.forEach((i: OrderItem) => {
-              const ci: CartItem = {
-                id: i.menu_item_id,
-                orderItemId: i.id,
-                name: i.name,
-                price: i.unit_price,
-                qty: i.qty,
-                note: i.note ?? '',
-                status: i.preparation_status,
-                originalQty: i.qty,
-                kot_number: i.kot_number
-              };
-              const kotNum = typeof i.kot_number === 'number' ? i.kot_number : 0;
-              if (!(kotNum in loadedSentKots)) { loadedSentKots[kotNum] = []; }
-              loadedSentKots[kotNum].push(ci);
-            });
-
-            const sent = Object.keys(loadedSentKots)
-              .map(k => ({ kotNumber: Number(k), items: loadedSentKots[Number(k)] }))
-              .sort((a, b) => b.kotNumber - a.kotNumber);
-
-            setSentKOTs(sent);
-            setUnsentItems([]);
-          }
+          if (active && res.success && res.data) { applyOrder(res.data); }
         })
         .catch((err: unknown) => { console.error(err); });
 
       api.tables.getAll().then(res => {
         if (active && res.success && res.data) {
+          setAllTables(res.data);
           const t = res.data.find(x => x.id === Number(tableId));
           if (t) { setTableInfo(t); }
         }
       }).catch((err: unknown) => { console.error(err); });
+    } else {
+      // Takeaway/delivery use the latest server-side draft as the persistent cart.
+      api.orders.getDraft().then(res => {
+        if (active && res.success && res.data) { applyOrder(res.data); }
+      }).catch((err: unknown) => { console.error(err); });
     }
     return () => { active = false; };
-  }, [tableId]);
+  }, [tableId, loadOrderData]);
 
   useEffect(() => {
     if (!createdAt) {
@@ -180,6 +213,51 @@ const OrderPage: React.FC = () => {
     });
   };
 
+  const handleChangeTable = () => {
+    if (!orderId) {
+      showToast({ message: 'Create the order before changing its table', variant: 'warning' });
+      return;
+    }
+    let targetTableId = Number(tableId);
+    showModal({
+      title: 'Change Table',
+      content: (
+        <div className="p-4 space-y-3">
+          <p className="text-sm text-gray-600">Move this dine-in order to another available table.</p>
+          <Select value={String(targetTableId)} onChange={(e) => { targetTableId = Number(e.target.value); }}>
+            {allTables.map(t => (
+              <option key={t.id} value={String(t.id)}>{t.name} — {t.custom_name ? `${t.custom_name} · ` : ''}{t.status === 'occupied' ? 'Occupied' : 'Available'}</option>
+            ))}
+          </Select>
+        </div>
+      ),
+      actions: (
+        <>
+          <Button variant="outline" onClick={hideModal}>Cancel</Button>
+          <Button
+            variant="primary"
+            disabled={!targetTableId || targetTableId === Number(tableId)}
+            onClick={() => {
+              hideModal();
+              void api.orders.changeTable({ orderId, tableId: targetTableId }).then(res => {
+                if (res.success) {
+                  showToast({ message: 'Order moved to the selected table', variant: 'success' });
+                  navigate(`/order/${targetTableId}`);
+                } else {
+                  showToast({ message: res.error ?? 'Failed to change table', variant: 'error' });
+                }
+              }).catch((err: unknown) => {
+                showToast({ message: `Failed to change table: ${err instanceof Error ? err.message : String(err)}`, variant: 'error' });
+              });
+            }}
+          >
+            Move Order
+          </Button>
+        </>
+      ),
+    });
+  };
+
   const handleCustomerSelect = async (selected: Customer | null) => {
     setCustomer(selected);
     if (!selected) {
@@ -208,22 +286,94 @@ const OrderPage: React.FC = () => {
     }
   };
 
-  const handleAddItem = (menuItem: MenuItem) => {
-    setUnsentItems(prev => {
-      const existing = prev.find(item => item.id === menuItem.id);
-      if (existing) {
-        return prev.map(item => item.id === menuItem.id ? { ...item, qty: item.qty + 1 } : item);
+  const cartLineKey = (item: CartItem): string => {
+    const mods = (item.modifiers ?? []).map(m => `${m.id}x${m.qty}`).sort().join(',');
+    return `${item.id}:${item.variant_id ?? 'base'}:${mods}`;
+  };
+
+  const handleAddItem = async (menuItem: CartItem) => {
+    try {
+      const key = cartLineKey(menuItem);
+      const existing = unsentItems.find(item => cartLineKey(item) === key);
+      if (existing?.orderItemId) {
+        const newQty = existing.qty + 1;
+        setUnsentItems(prev => prev.map(item => item.orderItemId === existing.orderItemId ? { ...item, qty: newQty } : item));
+        await api.orders.updateItemQty({ orderId: orderId as number, orderItemId: existing.orderItemId, qty: newQty });
+        return;
       }
-      return [...prev, { id: menuItem.id, name: menuItem.name, price: menuItem.price, qty: 1, note: '' }];
-    });
+
+      let currentOrderId = orderId;
+      if (!currentOrderId) {
+        if (!activeSession) {
+          showToast({ message: 'Please start a business day first to create a draft order', variant: 'warning' });
+          return;
+        }
+        const createRes = await api.orders.create({
+          tableId: Number(tableId) === 0 ? null : Number(tableId),
+          staffId: staff?.id,
+          customerId: customer?.id,
+          type: orderType,
+          status: 'DRAFT',
+        });
+        if (!createRes.success || !createRes.data) {
+          showToast({ message: createRes.error ?? 'Failed to create draft order', variant: 'error' });
+          return;
+        }
+        currentOrderId = createRes.data.id;
+        setOrderId(currentOrderId);
+        setCreatedAt(new Date().toISOString());
+      }
+
+      const addRes = await api.orders.addItems({
+        orderId: currentOrderId,
+        items: [{
+          menu_item_id: menuItem.id,
+          qty: menuItem.qty,
+          note: menuItem.note.trim() || null,
+          variant_id: menuItem.variant_id ?? null,
+          modifiers: (menuItem.modifiers ?? []).map(m => ({ id: m.id, qty: m.qty })),
+        }],
+        staffId: staff?.id,
+        keepDraft: true,
+      });
+      if (!addRes.success) {
+        showToast({ message: addRes.error ?? 'Failed to save cart item', variant: 'error' });
+        return;
+      }
+      await refreshOrderItems(currentOrderId);
+    } catch (e: unknown) {
+      showToast({ message: `Failed to save cart item: ${e instanceof Error ? e.message : String(e)}`, variant: 'error' });
+    }
   };
 
-  const handleUpdateQty = (id: number, delta: number) => {
-    setUnsentItems(prev => prev.map(item => item.id === id ? { ...item, qty: item.qty + delta } : item).filter(item => item.qty > 0));
+  const handleUpdateQty = async (id: number, delta: number) => {
+    const item = unsentItems.find(i => i.id === id);
+    if (!item) { return; }
+    const newQty = item.qty + delta;
+    if (newQty <= 0) {
+      if (item.orderItemId && orderId) {
+        const res = await api.orders.voidItem({ orderId, orderItemId: item.orderItemId, reason: 'Removed from cart before KOT' });
+        if (res.success) { await refreshOrderItems(orderId); }
+      } else {
+        setUnsentItems(prev => prev.filter(i => i.id !== id));
+      }
+      return;
+    }
+    setUnsentItems(prev => prev.map(i => i.id === id ? { ...i, qty: newQty } : i));
+    if (item.orderItemId && orderId) {
+      const res = await api.orders.updateItemQty({ orderId, orderItemId: item.orderItemId, qty: newQty });
+      if (!res.success) { showToast({ message: res.error ?? 'Failed to update quantity', variant: 'error' }); }
+    }
   };
 
-  const handleUpdateNote = (id: number, note: string) => {
-    setUnsentItems(prev => prev.map(item => item.id === id ? { ...item, note } : item));
+  const handleUpdateNote = async (id: number, note: string) => {
+    const item = unsentItems.find(i => i.id === id);
+    if (!item) { return; }
+    setUnsentItems(prev => prev.map(i => i.id === id ? { ...i, note } : i));
+    if (item.orderItemId && orderId) {
+      const res = await api.orders.updateItemNote({ orderId, orderItemId: item.orderItemId, note });
+      if (!res.success) { showToast({ message: res.error ?? 'Failed to update note', variant: 'error' }); }
+    }
   };
 
   const handleCancelItem = (orderItemId: number) => {
@@ -233,26 +383,10 @@ const OrderPage: React.FC = () => {
       content: <CancelOrderModal onConfirm={(note) => { 
         hideModal();
         api.orders.voidItem({ orderId, orderItemId, reason: note })
-          .then(res => {
+          .then(async res => {
             if (res.success) {
               showToast({ message: 'Item cancelled successfully', variant: 'success' });
-              if (tableId) {
-                api.orders.getByTable({ tableId: Number(tableId) }).then(refreshRes => {
-                  if (refreshRes.success && refreshRes.data) {
-                    const loadedSentKots: Record<number, CartItem[]> = {};
-                    refreshRes.data.items.forEach((i: OrderItem) => {
-                      const ci: CartItem = {
-                        id: i.menu_item_id, orderItemId: i.id, name: i.name, price: i.unit_price,
-                        qty: i.qty, note: i.note ?? '', status: i.preparation_status, kot_number: i.kot_number
-                      };
-                      const kotNum = typeof i.kot_number === 'number' ? i.kot_number : 0;
-                      if (!(kotNum in loadedSentKots)) { loadedSentKots[kotNum] = []; }
-                      loadedSentKots[kotNum].push(ci);
-                    });
-                    setSentKOTs(Object.keys(loadedSentKots).map(k => ({ kotNumber: Number(k), items: loadedSentKots[Number(k)] })).sort((a, b) => b.kotNumber - a.kotNumber));
-                  }
-                }).catch((err: unknown) => { console.error(err); });
-              }
+              await refreshOrderItems(orderId);
             } else {
               showToast({ message: `Failed to cancel item: ${res.error ?? 'Unknown error'}`, variant: 'error' });
             }
@@ -300,19 +434,25 @@ const OrderPage: React.FC = () => {
         setCreatedAt(new Date().toISOString());
       }
 
-      // 2. Add the cart lines — the backend prices them authoritatively.
-      const addRes = await api.orders.addItems({
-        orderId: currentOrderId,
-        items: unsentItems.map(item => ({
-          menu_item_id: item.id,
-          qty: item.qty,
-          note: item.note.trim() || null,
-        })),
-        staffId: staff?.id,
-      });
-      if (!addRes.success) {
-        showToast({ message: addRes.error ?? 'Failed to save items', variant: 'error' });
-        return;
+      // 2. Persist any cart lines that are not yet stored on the draft order.
+      // Lines already stored server-side are not duplicated here.
+      const itemsToPersist = unsentItems.filter(item => !item.orderItemId);
+      if (itemsToPersist.length > 0) {
+        const addRes = await api.orders.addItems({
+          orderId: currentOrderId,
+          items: itemsToPersist.map(item => ({
+            menu_item_id: item.id,
+            qty: item.qty,
+            note: item.note.trim() || null,
+            variant_id: item.variant_id ?? null,
+            modifiers: (item.modifiers ?? []).map(m => ({ id: m.id, qty: m.qty })),
+          })),
+          staffId: staff?.id,
+        });
+        if (!addRes.success) {
+          showToast({ message: addRes.error ?? 'Failed to save items', variant: 'error' });
+          return;
+        }
       }
 
       // 3. Send the new items to the kitchen (KOT).
@@ -389,7 +529,7 @@ const OrderPage: React.FC = () => {
             </div>
           )}
         </div>
-        <MenuPanel menuId={activeMenuId} onAddItem={handleAddItem} />
+        <MenuPanel menuId={activeMenuId} onAddItem={(item) => { void handleAddItem(item); }} />
       </div>
 
       <div className="w-96 bg-white p-6 pt-6 flex flex-col shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.05)] z-0">
@@ -425,6 +565,9 @@ const OrderPage: React.FC = () => {
                 <button onClick={handleRenameTable} className="text-blue-500 hover:text-blue-700 focus:outline-none bg-blue-50 rounded-full p-1" title="Set temporary table name">
                   <SvgIcon name="pencil" className="h-3.5 w-3.5" />
                 </button>
+                <button onClick={handleChangeTable} className="text-blue-500 hover:text-blue-700 focus:outline-none bg-blue-50 rounded-full p-1" title="Move order to another table">
+                  <SvgIcon name="arrow-right" className="h-3.5 w-3.5" />
+                </button>
               </div>
             )}
           </span>
@@ -441,8 +584,8 @@ const OrderPage: React.FC = () => {
         <CartPanel
           unsentItems={unsentItems}
           sentKOTs={sentKOTs}
-          onUpdateQty={handleUpdateQty}
-          onUpdateNote={handleUpdateNote}
+          onUpdateQty={(id, delta) => { void handleUpdateQty(id, delta); }}
+          onUpdateNote={(id, note) => { void handleUpdateNote(id, note); }}
           onCancelItem={(orderItemId) => { handleCancelItem(orderItemId); }}
           onSendKOT={(print) => { void handleSendKOT(print); }}
           onGenerateBill={() => {

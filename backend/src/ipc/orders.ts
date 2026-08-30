@@ -2,9 +2,9 @@ import { ipcMain } from 'electron';
 import { getDB } from '../db';
 import {
   addItemsToOrder, applyOrderDiscount, cancelOrder, changeOrderTable, createOrder,
-  getOpenOrders, getOrderByTable, getOrderById, getOrderItems,
+  getLatestDraftOrder, getOpenOrders, getOrderByTable, getOrderById, getOrderItems,
   sendKOT, updateItemNote, updateItemQuantity, updateOrderStatus,
-  updateOrderType, voidOrderItem,
+  updateOrderType, voidOrderItem, discardDraftOrder,
 } from '../services/order-service';
 import { assertCurrentPermission } from '../services/authz';
 import { OrderDiscount, OrderStatus } from '../services/pricing';
@@ -23,7 +23,7 @@ function wrap<T>(fn: () => T): { success: true; data: T } | { success: false; er
 
 export function registerOrdersIPC() {
   // ── Create ──────────────────────────────────────────────────────────
-  ipcMain.handle('orders:create', async (_event, payload: { tableId?: number | null; staffId?: number; covers?: number; note?: string; customerId?: number; type?: 'dine-in' | 'takeaway' | 'delivery' }) => {
+  ipcMain.handle('orders:create', async (_event, payload: { tableId?: number | null; staffId?: number; covers?: number; note?: string; customerId?: number; type?: 'dine-in' | 'takeaway' | 'delivery'; status?: 'DRAFT' | 'OPEN' }) => {
     return wrap(() => {
       const { id, order_number } = createOrder({
         tableId: payload.tableId ?? null,
@@ -32,12 +32,21 @@ export function registerOrdersIPC() {
         type: payload.type,
         covers: payload.covers,
         note: payload.note,
+        status: payload.status,
       });
       return { id, order_number };
     });
   });
 
   ipcMain.handle('orders:getOpen', async () => wrap(() => getOpenOrders()));
+  ipcMain.handle('orders:getDraft', async () => wrap(() => {
+    const draft = getLatestDraftOrder();
+    return draft ? { ...draft, items: getOrderItems(draft.id) } : null;
+  }));
+  ipcMain.handle('orders:discardDraft', async (_event, payload: { orderId?: number }) => wrap(() => {
+    discardDraftOrder(payload.orderId);
+    return true;
+  }));
   ipcMain.handle('orders:getById', async (_event, payload: { orderId: number }) => wrap(() => {
     const order = getOrderById(payload.orderId);
     if (!order) { throw new Error('Order not found'); }
@@ -61,9 +70,9 @@ export function registerOrdersIPC() {
   }));
 
   // ── Cart / items ────────────────────────────────────────────────────
-  ipcMain.handle('orders:addItems', async (_event, payload: { orderId: number; items: unknown[]; staffId?: number }) => {
+  ipcMain.handle('orders:addItems', async (_event, payload: { orderId: number; items: unknown[]; staffId?: number; keepDraft?: boolean }) => {
     return wrap(() => {
-      const result = addItemsToOrder(payload.orderId, payload.items as never[], payload.staffId);
+      const result = addItemsToOrder(payload.orderId, payload.items as never[], payload.staffId, { keepDraft: payload.keepDraft === true });
       return { added: result.added, order: result.order };
     });
   });
