@@ -28,22 +28,22 @@ const mockApi = {
         {
           id: 1, name: 'Starters', sort_order: 1, is_active: 1,
           items: [
-            { id: 101, category_id: 1, name: 'Paneer Tikka', price: 250, is_veg: 1, is_available: 1, cgst_rate: 2.5, sgst_rate: 2.5, hsn_code: '2106' },
-            { id: 102, category_id: 1, name: 'Chicken Tikka', price: 350, is_veg: 0, is_available: 1, cgst_rate: 2.5, sgst_rate: 2.5, hsn_code: '2106' },
+            { id: 101, category_id: 1, name: 'Chicken Burger', price: 850, is_veg: 0, is_available: 1, cgst_rate: 0, sgst_rate: 0, hsn_code: null, tax_rate: 0 },
+            { id: 102, category_id: 1, name: 'Fries', price: 300, is_veg: 0, is_available: 1, cgst_rate: 0, sgst_rate: 0, hsn_code: null, tax_rate: 0 },
           ]
         },
         {
           id: 2, name: 'Main Course', sort_order: 2, is_active: 1,
           items: [
-            { id: 201, category_id: 2, name: 'Butter Chicken', price: 450, is_veg: 0, is_available: 1, cgst_rate: 2.5, sgst_rate: 2.5, hsn_code: '2106' },
-            { id: 202, category_id: 2, name: 'Dal Makhani', price: 300, is_veg: 1, is_available: 1, cgst_rate: 2.5, sgst_rate: 2.5, hsn_code: '2106' },
+            { id: 201, category_id: 2, name: 'Chicken Karahi', price: 1600, is_veg: 0, is_available: 1, cgst_rate: 0, sgst_rate: 0, hsn_code: null, tax_rate: 0 },
+            { id: 202, category_id: 2, name: 'Beef Biryani', price: 550, is_veg: 0, is_available: 1, cgst_rate: 0, sgst_rate: 0, hsn_code: null, tax_rate: 0 },
           ]
         },
         {
           id: 3, name: 'Breads', sort_order: 3, is_active: 1,
           items: [
-            { id: 301, category_id: 3, name: 'Garlic Naan', price: 60, is_veg: 1, is_available: 1, cgst_rate: 2.5, sgst_rate: 2.5, hsn_code: '1905' },
-            { id: 302, category_id: 3, name: 'Butter Roti', price: 30, is_veg: 1, is_available: 1, cgst_rate: 2.5, sgst_rate: 2.5, hsn_code: '1905' },
+            { id: 301, category_id: 3, name: 'Naan', price: 60, is_veg: 0, is_available: 1, cgst_rate: 0, sgst_rate: 0, hsn_code: null, tax_rate: 0 },
+            { id: 302, category_id: 3, name: 'Soft Drink', price: 150, is_veg: 0, is_available: 1, cgst_rate: 0, sgst_rate: 0, hsn_code: null, tax_rate: 0 },
           ]
         }
       ]
@@ -110,7 +110,7 @@ const mockApi = {
         activeShift = null;
         return Promise.resolve({ success: true });
       },
-      getTotals: (_payload: { openedAt: string }) => Promise.resolve({ success: true, data: { cash: 0, card: 0, upi: 0, complimentary: 0 } }),
+      getTotals: (_payload: { openedAt: string }) => Promise.resolve({ success: true, data: { cash: 0, card: 0, jazzcash: 0, easypaisa: 0, bank_transfer: 0, other: 0 } }),
     };
   })(),
   reports: {
@@ -120,12 +120,13 @@ const mockApi = {
         date: new Date().toISOString().split('T')[0],
         totalOrders: 0,
         totalRevenue: 0,
-        totalCGST: 0,
-        totalSGST: 0,
+        totalTax: 0,
+        totalServiceCharge: 0,
         hourlyData: []
       } 
     }),
     gst: () => Promise.resolve({ success: true, data: {} }),
+    tax: () => Promise.resolve({ success: true, data: [] }),
   },
   backup: {
     export: () => Promise.resolve({ success: true, data: '/mock/backup.db' }),
@@ -256,11 +257,12 @@ export const api = (ipcApi ?? mockApi) as {
     getActive: () => Promise<IPCResponse<Shift | null>>;
     open: (payload: { staffId: number; openingCash: number }) => Promise<IPCResponse<{ id: number }>>;
     close: (payload: { shiftId: number; closingCash: number; note?: string }) => Promise<IPCResponse<unknown>>;
-    getTotals: (payload: { openedAt: string }) => Promise<IPCResponse<{ cash: number; card: number; upi: number; complimentary: number }>>;
+    getTotals: (payload: { openedAt: string }) => Promise<IPCResponse<{ cash: number; card: number; jazzcash: number; easypaisa: number; bank_transfer: number; other: number }>>;
   };
   reports: {
     daily: (payload: unknown) => Promise<IPCResponse<unknown>>;
     gst: (payload: unknown) => Promise<IPCResponse<unknown>>;
+    tax: () => Promise<IPCResponse<unknown>>;
     getPastOrders: (payload: { filter: 'daily' | 'weekly' | 'monthly' | 'yearly'; page: number; limit: number }) => Promise<IPCResponse<{ stats: import('../types/models').PastOrderStats; orders: import('../types/models').PastOrderData[]; totalPages: number; currentPage: number }>>;
     printPastBill: (payload: { orderId: number }) => Promise<IPCResponse<unknown>>;
   };

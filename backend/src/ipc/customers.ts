@@ -120,7 +120,7 @@ export function registerCustomersIPC() {
         return { success: false, error: 'Settlement amount must be greater than zero.' };
       }
       if (payload.amount > customer.outstanding_balance) {
-        return { success: false, error: `Amount exceeds outstanding balance of ₹${customer.outstanding_balance.toFixed(2)}.` };
+        return { success: false, error: `Amount exceeds outstanding balance of Rs ${customer.outstanding_balance.toFixed(2)}.` };
       }
 
       db.transaction(() => {

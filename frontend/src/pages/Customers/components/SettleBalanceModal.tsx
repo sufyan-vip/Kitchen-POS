@@ -10,7 +10,7 @@ interface Props {
 
 const SettleBalanceModal: React.FC<Props> = ({ customer, onSuccess }) => {
   const [amount, setAmount] = useState(customer.outstanding_balance.toString());
-  const [method, setMethod] = useState<'cash' | 'card' | 'upi'>('cash');
+  const [method, setMethod] = useState<'cash' | 'card' | 'jazzcash'>('cash');
   const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.SyntheticEvent) => {
@@ -46,14 +46,14 @@ const SettleBalanceModal: React.FC<Props> = ({ customer, onSuccess }) => {
     <form id="settle-balance-form" onSubmit={(e) => { void handleSubmit(e); }} className="space-y-4">
       <div className="bg-blue-50 p-4 rounded-md border border-blue-100 mb-4">
         <p className="text-sm text-blue-800">
-          Current Outstanding Balance: <strong className="text-lg text-red-600">₹{customer.outstanding_balance.toFixed(2)}</strong>
+          Current Outstanding Balance: <strong className="text-lg text-red-600">Rs {customer.outstanding_balance.toFixed(2)}</strong>
         </p>
       </div>
 
       {error && <div className="p-3 bg-red-100 text-red-700 rounded-md text-sm">{error}</div>}
       
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Amount to Settle (₹)</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Amount to Settle (Rs )</label>
         <Input 
           type="number"
           min="0.01"
@@ -69,7 +69,7 @@ const SettleBalanceModal: React.FC<Props> = ({ customer, onSuccess }) => {
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method</label>
         <div className="flex gap-2">
-          {(['cash', 'card', 'upi'] as const).map(m => (
+          {(['cash', 'card', 'jazzcash'] as const).map(m => (
             <button
               key={m}
               type="button"

@@ -87,7 +87,7 @@ export function InventoryItemModal({ onClose, onRefresh, initialData }: Props) {
           onChange={e => { setLowStockAlertAt(e.target.value === '' ? '' : Number(e.target.value)); }}
         />
         <Input
-          label="Cost per Unit (₹)"
+          label="Cost per Unit (Rs )"
           type="number"
           min="0"
           step="0.01"

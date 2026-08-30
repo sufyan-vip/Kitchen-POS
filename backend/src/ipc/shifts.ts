@@ -27,7 +27,7 @@ interface ShiftRow {
 }
 
 interface PaymentTotalRow {
-  method: 'cash' | 'card' | 'upi' | 'complimentary';
+  method: 'cash' | 'card' | 'jazzcash' | 'easypaisa' | 'bank_transfer' | 'other' | 'unpaid';
   total_amount: number;
 }
 
@@ -88,16 +88,19 @@ export function registerShiftsIPC() {
           method, 
           COALESCE(SUM(amount), 0) AS total_amount
         FROM payments
-        WHERE paid_at >= ?
+        WHERE COALESCE(paid_at, created_at) >= ? AND status = 'PAID'
         GROUP BY method
       `).all(payload.openedAt) as PaymentTotalRow[];
 
       // Map rows to clean payment breakdown object
-      const totals = {
+      const totals: Record<string, number> = {
         cash: 0,
         card: 0,
-        upi: 0,
-        complimentary: 0
+        jazzcash: 0,
+        easypaisa: 0,
+        bank_transfer: 0,
+        other: 0,
+        unpaid: 0
       };
 
       paymentTotals.forEach(row => {

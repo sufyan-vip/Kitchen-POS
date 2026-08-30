@@ -78,7 +78,7 @@ const PastOrdersPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-white p-4 rounded border shadow-sm flex flex-col">
             <span className="text-sm font-medium text-gray-500 mb-1">Total Revenue</span>
-            <span className="text-2xl font-bold text-gray-900">₹{stats.totalRevenue.toFixed(2)}</span>
+            <span className="text-2xl font-bold text-gray-900">Rs {stats.totalRevenue.toFixed(2)}</span>
           </div>
           <div className="bg-white p-4 rounded border shadow-sm flex flex-col">
             <span className="text-sm font-medium text-gray-500 mb-1">Total Orders</span>
@@ -86,7 +86,7 @@ const PastOrdersPage: React.FC = () => {
           </div>
           <div className="bg-white p-4 rounded border shadow-sm flex flex-col">
             <span className="text-sm font-medium text-gray-500 mb-1">Average Order Value</span>
-            <span className="text-2xl font-bold text-gray-900">₹{stats.averageOrderValue.toFixed(2)}</span>
+            <span className="text-2xl font-bold text-gray-900">Rs {stats.averageOrderValue.toFixed(2)}</span>
           </div>
         </div>
       )}
@@ -150,7 +150,7 @@ const PastOrdersPage: React.FC = () => {
                         })()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold text-gray-900">
-                        ₹{order.amount.toFixed(2)}
+                        Rs {order.amount.toFixed(2)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-mono text-gray-500">
                         {formatMsToTime(order.occupiedTimeMs)}

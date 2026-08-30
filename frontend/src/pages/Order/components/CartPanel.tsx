@@ -53,7 +53,7 @@ const CartPanel: React.FC<Props> = ({ unsentItems, sentKOTs, onUpdateQty, onUpda
                       {item.note && <p className="text-xs text-gray-500 mt-0.5">{item.note}</p>}
                     </div>
                     <div className="flex flex-col items-end pl-2">
-                      <span className="text-sm font-bold text-gray-700">₹{(item.price * item.qty).toFixed(2)}</span>
+                      <span className="text-sm font-bold text-gray-700">Rs {(item.price * item.qty).toFixed(2)}</span>
                       {item.orderItemId !== undefined && (
                         <button 
                           onClick={() => { onCancelItem(item.orderItemId as number); }}
@@ -80,7 +80,7 @@ const CartPanel: React.FC<Props> = ({ unsentItems, sentKOTs, onUpdateQty, onUpda
                 <div key={item.id} className="border border-blue-100 rounded p-3 bg-blue-50 relative">
                   <div className="flex justify-between items-start mb-2">
                     <h4 className="font-medium text-blue-900 pr-8">{item.name}</h4>
-                    <p className="font-bold text-blue-900 shrink-0">₹{(item.price * item.qty).toFixed(2)}</p>
+                    <p className="font-bold text-blue-900 shrink-0">Rs {(item.price * item.qty).toFixed(2)}</p>
                   </div>
                   <div className="flex items-center justify-between mt-2">
                     <div className="flex items-center">
@@ -116,7 +116,7 @@ const CartPanel: React.FC<Props> = ({ unsentItems, sentKOTs, onUpdateQty, onUpda
       <div className="mt-4 pt-4 border-t border-gray-200">
         <div className="flex justify-between items-center mb-4 px-1">
           <span className="text-gray-600 font-medium">Total</span>
-          <span className="text-xl font-bold">₹{subtotal.toFixed(2)}</span>
+          <span className="text-xl font-bold">Rs {subtotal.toFixed(2)}</span>
         </div>
         <div className="space-y-3">
           <div className="flex gap-2">

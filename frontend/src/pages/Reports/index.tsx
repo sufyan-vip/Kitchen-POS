@@ -11,8 +11,8 @@ interface DailyReport {
   date: string;
   totalOrders: number;
   totalRevenue: number;
-  totalCGST: number;
-  totalSGST: number;
+  totalCTax: number;
+  totalSTax: number;
   hourlyData: { hour: string; orders: number; revenue: number }[];
 }
 
@@ -53,7 +53,7 @@ const CustomTooltip = ({ active, payload, label }: TooltipProps) => {
         <div className="space-y-1 text-sm">
           <p className="flex justify-between gap-4">
             <span className="text-gray-500">Revenue:</span>
-            <span className="font-bold text-blue-600">₹{Math.round(data.revenue)}</span>
+            <span className="font-bold text-blue-600">Rs {Math.round(data.revenue)}</span>
           </p>
           <p className="flex justify-between gap-4">
             <span className="text-gray-500">Orders:</span>
@@ -100,8 +100,8 @@ const ReportsPage: React.FC = () => {
   const handleExportCSV = useCallback(async () => {
     if (!report) { return; }
     const csvContent = "data:text/csv;charset=utf-8," 
-      + "Filter,Total Orders,Total Revenue,CGST,SGST\n"
-      + `${filter},${report.totalOrders},${report.totalRevenue},${report.totalCGST},${report.totalSGST}`;
+      + "Filter,Total Orders,Total Revenue,CTax,STax\n"
+      + `${filter},${report.totalOrders},${report.totalRevenue},${report.totalCTax},${report.totalSTax}`;
     
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -193,7 +193,7 @@ const ReportsPage: React.FC = () => {
             />
             <KPICard
               title="Total Revenue"
-              value={`₹${Math.round(report.totalRevenue)}`}
+              value={`Rs ${Math.round(report.totalRevenue)}`}
               icon={<SvgIcon name="indian-rupee" width={24} height={24} />}
               trend={10.2}
               trendLabel="vs last period"
@@ -201,8 +201,8 @@ const ReportsPage: React.FC = () => {
               colorTheme="green"
             />
             <KPICard
-              title="Total CGST"
-              value={`₹${Math.round(report.totalCGST)}`}
+              title="Total CTax"
+              value={`Rs ${Math.round(report.totalCTax)}`}
               icon={<SvgIcon name="percent" width={24} height={24} />}
               trend={2.1}
               trendLabel="vs last period"
@@ -210,8 +210,8 @@ const ReportsPage: React.FC = () => {
               colorTheme="purple"
             />
             <KPICard
-              title="Total SGST"
-              value={`₹${Math.round(report.totalSGST)}`}
+              title="Total STax"
+              value={`Rs ${Math.round(report.totalSTax)}`}
               icon={<SvgIcon name="percent" width={24} height={24} />}
               trend={2.1}
               trendLabel="vs last period"
@@ -230,7 +230,7 @@ const ReportsPage: React.FC = () => {
                   <BarChart data={report.hourlyData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                     <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} dy={10} tickFormatter={formatDateLabelShort} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} tickFormatter={(val: number) => `₹${val}`} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} tickFormatter={(val: number) => `Rs ${val}`} />
                     <Tooltip 
                       content={<CustomTooltip />}
                       cursor={{ fill: '#f3f4f6' }}

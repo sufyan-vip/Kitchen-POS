@@ -37,6 +37,10 @@ contextBridge.exposeInMainWorld('api', {
     delete: (payload: any) => ipcRenderer.invoke('tables:delete', payload),
     updateCustomName: (payload: any) => ipcRenderer.invoke('tables:updateCustomName', payload),
   },
+  payments: {
+    updateStatus: (payload: any) => ipcRenderer.invoke('payments:updateStatus', payload),
+    verify: (payload: any) => ipcRenderer.invoke('payments:verify', payload),
+  },
   billing: {
     createBill: (payload: any) => ipcRenderer.invoke('billing:createBill', payload),
     getBill: (payload: any) => ipcRenderer.invoke('billing:getBill', payload),
@@ -65,6 +69,7 @@ contextBridge.exposeInMainWorld('api', {
   reports: {
     daily: (payload: any) => ipcRenderer.invoke('reports:daily', payload),
     gst: (payload: any) => ipcRenderer.invoke('reports:gst', payload),
+    tax: () => ipcRenderer.invoke('reports:tax'),
     getPastOrders: (payload: any) => ipcRenderer.invoke('reports:getPastOrders', payload),
     printPastBill: (payload: any) => ipcRenderer.invoke('reports:printPastBill', payload),
   },

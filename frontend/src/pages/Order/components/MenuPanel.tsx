@@ -63,7 +63,7 @@ const MenuPanel: React.FC<Props> = ({ menuId, onAddItem }) => {
             <div className={`p-5 flex flex-col z-10 bg-white ${item.image_url ? 'pt-3' : 'pt-0'}`}>
               {item.image_url && <h3 className="font-bold text-sm md:text-base leading-tight mb-1 text-gray-800 line-clamp-2">{item.name}</h3>}
               <div className="flex justify-between items-end mt-auto">
-                <p className="text-blue-600 font-black text-lg tracking-tight">₹{item.price.toFixed(2)}</p>
+                <p className="text-blue-600 font-black text-lg tracking-tight">Rs {item.price.toFixed(2)}</p>
                 
                 {/* Plus Icon indicating add action */}
                 <div className="bg-gray-50 text-gray-400 rounded-full p-1.5 opacity-0 group-hover:opacity-100 group-hover:bg-blue-50 group-hover:text-blue-600 transition-all transform translate-x-2 group-hover:translate-x-0">

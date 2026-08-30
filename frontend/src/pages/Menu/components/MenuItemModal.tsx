@@ -14,10 +14,9 @@ interface Props {
 const MenuItemModal: React.FC<Props> = ({ item, categoryId, onSuccess }) => {
   const [name, setName] = useState(item?.name ?? '');
   const [price, setPrice] = useState(item ? item.price.toString() : '');
-  const [isVeg, setIsVeg] = useState(item ? item.is_veg === 1 : true);
-  const [cgst, setCgst] = useState(item?.cgst_rate?.toString() ?? '2.5');
-  const [sgst, setSgst] = useState(item?.sgst_rate?.toString() ?? '2.5');
-  const [hsn, setHsn] = useState(item?.hsn_code ?? '');
+  const [isDietary, setIsDietary] = useState(item ? item.is_veg === 1 : false);
+  const [taxRate, setTaxRate] = useState(String(item?.tax_rate ?? 0));
+  const [taxName, setTaxName] = useState(item?.tax_name ?? 'Sales Tax');
   const [imageUrl, setImageUrl] = useState(item?.image_url ?? '');
 
   const { showToast } = useToast();
@@ -45,10 +44,13 @@ const MenuItemModal: React.FC<Props> = ({ item, categoryId, onSuccess }) => {
         name,
         price: parseFloat(price),
         category_id: categoryId,
-        is_veg: isVeg ? 1 : 0,
-        cgst_rate: parseFloat(cgst) || 0,
-        sgst_rate: parseFloat(sgst) || 0,
-        hsn_code: hsn,
+        is_veg: isDietary ? 1 : 0,
+        cgst_rate: 0,
+        sgst_rate: 0,
+        hsn_code: null,
+        tax_name: taxName,
+        tax_rate: parseFloat(taxRate) || 0,
+        tax_mode: 'exclusive',
         image_url: imageUrl || null,
         is_available: item ? item.is_available : 1
       };
@@ -77,7 +79,7 @@ const MenuItemModal: React.FC<Props> = ({ item, categoryId, onSuccess }) => {
           required
           value={name}
           onChange={(e) => { setName(e.target.value); }}
-          placeholder="e.g. Butter Chicken"
+          placeholder="e.g. Chicken Karahi"
           autoFocus
         />
 
@@ -102,7 +104,7 @@ const MenuItemModal: React.FC<Props> = ({ item, categoryId, onSuccess }) => {
 
         <div className="grid grid-cols-2 gap-4">
           <Input 
-            label="Price (₹)"
+            label="Price (Rs )"
             type="number"
             required
             min="0"
@@ -119,53 +121,45 @@ const MenuItemModal: React.FC<Props> = ({ item, categoryId, onSuccess }) => {
                 type="button"
                 variant="ghost"
                 block
-                onClick={() => { setIsVeg(true); }}
-                className={`rounded-md ${isVeg ? 'bg-white shadow-sm text-green-700' : 'text-gray-500'}`}
+                onClick={() => { setIsDietary(true); }}
+                className={`rounded-md ${isDietary ? 'bg-white shadow-sm text-green-700' : 'text-gray-500'}`}
               >
-                Veg
+                Dietary
               </Button>
               <Button
                 type="button"
                 variant="ghost"
                 block
-                onClick={() => { setIsVeg(false); }}
-                className={`rounded-md ${!isVeg ? 'bg-white shadow-sm text-red-700' : 'text-gray-500'}`}
+                onClick={() => { setIsDietary(false); }}
+                className={`rounded-md ${!isDietary ? 'bg-white shadow-sm text-red-700' : 'text-gray-500'}`}
               >
-                Non-Veg
+                Non-Dietary
               </Button>
             </div>
           </div>
         </div>
 
         <div className="border-t pt-4 mt-2">
-          <h3 className="text-sm font-bold text-gray-800 mb-3">GST & Billing</h3>
+          <h3 className="text-sm font-bold text-gray-800 mb-3">Tax & Billing</h3>
           
           <div className="grid grid-cols-2 gap-4 mb-3">
             <Input 
-              label="CGST (%)"
-              type="number"
-              min="0"
-              step="0.1"
-              value={cgst}
-              onChange={(e) => { setCgst(e.target.value); }}
+              label="Tax Name"
+              type="text"
+              value={taxName}
+              onChange={(e) => { setTaxName(e.target.value); }}
+              placeholder="Sales Tax"
             />
             <Input 
-              label="SGST (%)"
+              label="Tax Rate (%)"
               type="number"
               min="0"
               step="0.1"
-              value={sgst}
-              onChange={(e) => { setSgst(e.target.value); }}
+              value={taxRate}
+              onChange={(e) => { setTaxRate(e.target.value); }}
             />
           </div>
-
-          <Input 
-            label="HSN Code"
-            type="text"
-            value={hsn}
-            onChange={(e) => { setHsn(e.target.value); }}
-            placeholder="e.g. 2106"
-          />
+          <p className="text-xs text-gray-500">Optional per-item tax snapshot. Leave 0 to use no item-specific tax.</p>
         </div>
       </div>
 

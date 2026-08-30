@@ -87,17 +87,17 @@ const MenuItemList: React.FC<Props> = ({ category, onEdit, onRecipeEdit, onAdd, 
                   <div className="flex gap-2 items-center">
                     <span 
                       className={`inline-block w-3 h-3 rounded-full ${item.is_veg === 1 ? 'bg-green-500' : 'bg-red-500'}`} 
-                      title={item.is_veg === 1 ? 'Veg' : 'Non-Veg'}
+                      title={item.is_veg === 1 ? 'Dietary' : 'Non-Dietary'}
                     />
                     <h3 className="font-semibold text-gray-800">{item.name}</h3>
                   </div>
-                  <span className="font-bold text-gray-900">₹{item.price.toFixed(2)}</span>
+                  <span className="font-bold text-gray-900">Rs {item.price.toFixed(2)}</span>
                 </div>
                 
                 <div className="text-xs text-gray-500 mb-4 flex gap-3">
-                  <span>CGST: {item.cgst_rate ?? 0}%</span>
-                  <span>SGST: {item.sgst_rate ?? 0}%</span>
-                  {item.hsn_code && <span>HSN: {item.hsn_code}</span>}
+                  <span>CTax: {item.cgst_rate ?? 0}%</span>
+                  <span>STax: {item.sgst_rate ?? 0}%</span>
+                  {item.hsn_code && <span>Code: {item.hsn_code}</span>}
                 </div>
 
                 <div className="flex justify-between items-center pt-3 border-t">

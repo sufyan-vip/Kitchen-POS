@@ -20,6 +20,7 @@ import { registerCustomersIPC } from './ipc/customers';
 import { registerDashboardIPC } from './ipc/dashboard';
 import { registerBusinessSessionIPC } from './ipc/business-session';
 import { registerSystemIPC } from './ipc/system';
+import { registerPaymentsIPC } from './ipc/payments';
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -98,6 +99,7 @@ function registerAllIPC() {
   registerDashboardIPC();
   registerBusinessSessionIPC();
   registerSystemIPC();
+  registerPaymentsIPC();
 }
 
 void app.whenReady().then(async () => {

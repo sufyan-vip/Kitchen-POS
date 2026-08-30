@@ -32,7 +32,11 @@ export interface MenuItem {
   price: number;
   cgst_rate?: number;
   sgst_rate?: number;
-  hsn_code?: string;
+  hsn_code?: string | null;
+  tax_name?: string | null;
+  tax_rate?: number;
+  tax_mode?: 'exclusive' | 'inclusive';
+  dietary_label?: string | null;
   is_veg: number;
   is_available?: number;
   image_url?: string | null;
