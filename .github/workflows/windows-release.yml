@@ -140,7 +140,7 @@ jobs:
             throw "Electron binary was not installed."
           }
 
-      - name: Rebuild better-sqlite3 for Electron
+      - name: Rebuild better-sqlite3 for Electron (root)
         shell: pwsh
         env:
           npm_config_msvs_version: "2022"
@@ -151,7 +151,7 @@ jobs:
 
           npx electron-rebuild -f -w better-sqlite3
 
-      - name: Verify better-sqlite3 native module
+      - name: Verify better-sqlite3 native module (root)
         shell: pwsh
         run: |
           $native = Get-ChildItem `
@@ -161,7 +161,40 @@ jobs:
             -File
 
           if (-not $native) {
-            throw "better-sqlite3 native module was not produced."
+            throw "root better-sqlite3 native module was not produced."
+          }
+
+          Write-Host "Native module found:"
+          $native | Select-Object FullName, Length
+
+      - name: Install backend dependencies (no lifecycle scripts)
+        shell: pwsh
+        working-directory: backend
+        run: |
+          npm ci --ignore-scripts
+
+      - name: Rebuild backend's better-sqlite3 for Electron
+        shell: pwsh
+        env:
+          npm_config_msvs_version: "2022"
+          npm_config_python: ${{ env.pythonLocation }}\python.exe
+        working-directory: backend
+        run: |
+          where.exe cl.exe
+
+          npx electron-rebuild -f -w better-sqlite3 -v 30.5.1
+
+      - name: Verify backend native module
+        shell: pwsh
+        run: |
+          $native = Get-ChildItem `
+            -Path "backend\node_modules\better-sqlite3" `
+            -Recurse `
+            -Filter "*.node" `
+            -File
+
+          if (-not $native) {
+            throw "backend's better-sqlite3 native module was not produced."
           }
 
           Write-Host "Native module found:"
@@ -169,6 +202,7 @@ jobs:
 
       - name: Run backend tests
         shell: pwsh
+        working-directory: backend
         run: |
           npm test
 
