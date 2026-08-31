@@ -110,13 +110,21 @@ jobs:
           Write-Host "Python:"
           python --version
 
-      - name: Install root dependencies
+      - name: Install root dependencies (no lifecycle scripts)
         shell: pwsh
-        env:
-          npm_config_msvs_version: "2022"
-          npm_config_python: ${{ env.pythonLocation }}\python.exe
         run: |
-          npm ci
+          npm ci --ignore-scripts
+
+      - name: Download Electron binary manually
+        shell: pwsh
+        run: |
+          node node_modules/electron/install.js
+
+          if (-not (Test-Path "node_modules/electron/dist/electron.exe")) {
+            throw "Electron binary failed to download."
+          }
+
+          Write-Host "Electron binary downloaded successfully."
 
       - name: Verify Electron
         shell: pwsh
