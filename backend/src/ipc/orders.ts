@@ -61,6 +61,7 @@ export function registerOrdersIPC() {
   }));
 
   ipcMain.handle('orders:updateCustomer', async (_event, payload: { orderId: number; customerId: number }) => wrap(() => {
+    assertCurrentPermission('orders_edit');
     const db = getDB();
     const order = getOrderById(payload.orderId);
     if (!order) { throw new Error('Order not found'); }

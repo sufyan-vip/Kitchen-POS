@@ -7,17 +7,42 @@ import * as path from 'path';
 vi.mock('electron', () => {
   const userData = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pos-userdata-')), 'userData');
   fs.mkdirSync(userData, { recursive: true });
+  const mockApp = {
+    getPath: () => userData,
+    whenReady: () => Promise.resolve(),
+    isPackaged: false,
+    relaunch: () => undefined,
+    exit: () => undefined,
+  };
+  const mockIpcMain = { handle: () => undefined, on: () => undefined };
+  const mockDialog = {
+    showSaveDialog: async () => ({ canceled: true }),
+    showOpenDialog: async () => ({ canceled: true }),
+  };
+  const mockSession = {
+    defaultSession: {
+      webRequest: {
+        onHeadersReceived: () => undefined,
+      },
+    },
+  };
+  const mockBrowserWindow = { getAllWindows: (): unknown[] => [] };
+  const mockProtocol = { handle: () => undefined };
+  const mockNet = { fetch: async () => undefined };
+
+  const electronMock = {
+    app: mockApp,
+    BrowserWindow: mockBrowserWindow,
+    ipcMain: mockIpcMain,
+    dialog: mockDialog,
+    session: mockSession,
+    protocol: mockProtocol,
+    net: mockNet,
+  };
+
   return {
-    app: {
-      getPath: () => userData,
-      whenReady: () => Promise.resolve(),
-      isPackaged: false,
-    },
-    BrowserWindow: { getAllWindows: (): unknown[] => [] },
-    ipcMain: { handle: () => undefined },
-    dialog: {
-      showSaveDialog: async () => ({ canceled: true }),
-      showOpenDialog: async () => ({ canceled: true }),
-    },
+    __esModule: true,
+    ...electronMock,
+    default: electronMock,
   };
 });

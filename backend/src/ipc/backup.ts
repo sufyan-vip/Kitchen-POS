@@ -6,6 +6,7 @@ import Store from 'electron-store';
 import { pruneOldBackups, formatLocalDate, checkShouldFireReminder, type BackupReminderConfig } from './backup-utils';
 import archiver from 'archiver';
 import extractZip from 'extract-zip';
+import { assertCurrentPermission } from '../services/authz';
 
 interface AutoBackupConfig {
   enabled: boolean;
@@ -98,6 +99,7 @@ export function registerBackupIPC() {
   ipcMain.handle('backup:export', async () => {
     let tempDbPath: string | null = null;
     try {
+      assertCurrentPermission('settings');
       const db = getDB();
       const { canceled, filePath } = await dialog.showSaveDialog({
         title: 'Export Full Backup (ZIP)',
@@ -149,6 +151,7 @@ export function registerBackupIPC() {
   ipcMain.handle('backup:import', async () => {
     let extractDir: string | null = null;
     try {
+      assertCurrentPermission('settings');
       const { canceled, filePaths } = await dialog.showOpenDialog({
         title: 'Import Full Backup (ZIP)',
         properties: ['openFile'],
@@ -241,6 +244,7 @@ export function registerBackupIPC() {
 
   ipcMain.handle('backup:setAutoBackupConfig', async (_, payload: { autoBackup?: Partial<AutoBackupConfig>; backupReminder?: Partial<BackupReminderConfig> }) => {
     try {
+      assertCurrentPermission('settings');
       const store = new Store();
       if (payload.autoBackup) {
         const current = store.get('autoBackup', DEFAULT_AUTO_BACKUP) as AutoBackupConfig;
@@ -258,6 +262,7 @@ export function registerBackupIPC() {
 
   ipcMain.handle('backup:selectAutoBackupPath', async () => {
     try {
+      assertCurrentPermission('settings');
       const { canceled, filePaths } = await dialog.showOpenDialog({
         title: 'Select Auto-Backup Folder',
         properties: ['openDirectory', 'createDirectory'],
@@ -271,6 +276,7 @@ export function registerBackupIPC() {
 
   ipcMain.handle('backup:triggerNow', async () => {
     try {
+      assertCurrentPermission('settings');
       await performAutoBackup();
       return { success: true };
     } catch (e: unknown) {

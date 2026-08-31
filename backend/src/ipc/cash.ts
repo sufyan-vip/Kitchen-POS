@@ -3,6 +3,7 @@ import {
   addCashEntry, closeShift, getActiveShift, listCashEntries, listShifts, openShift, ShiftRow,
 } from '../services/cash';
 import { getDB } from '../db';
+import { assertCurrentPermission } from '../services/authz';
 
 function wrap<T>(fn: () => T): { success: true; data: T } | { success: false; error: string } {
   try {
@@ -27,11 +28,15 @@ export function registerCashIPC() {
     wrap(() => addCashEntry(payload.shiftId, payload.type, payload.amount, payload.note ?? null)));
 
   ipcMain.handle('shifts:getCashEntries', async (_event, payload: { shiftId: number }) =>
-    wrap(() => listCashEntries(payload.shiftId)));
+    wrap(() => {
+      assertCurrentPermission('shifts_view');
+      return listCashEntries(payload.shiftId);
+    }));
 
   // Legacy totals endpoint — payment breakdown since a timestamp
   ipcMain.handle('shifts:getTotals', async (_event, payload: { openedAt: string }) => {
     return wrap(() => {
+      assertCurrentPermission('shifts_view');
       const db = getDB();
       const rows = db.prepare(`
         SELECT method, COALESCE(SUM(amount_minor), 0) AS total_minor
