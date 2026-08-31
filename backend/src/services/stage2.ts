@@ -569,6 +569,10 @@ export function deactivateTable(idValue: number): void {
   assertCurrentPermission('table_management');
   const id = requiredId(idValue, 'Table id');
   const database = db();
+  const activeOrder = database.prepare("SELECT order_number FROM orders WHERE table_id = ? AND status NOT IN ('COMPLETED','CANCELLED') LIMIT 1").get(id) as { order_number: string } | undefined;
+  if (activeOrder) {
+    throw new Error(`Cannot deactivate table with an active order (${activeOrder.order_number})`);
+  }
   const result = database.prepare('UPDATE tables SET is_active = 0, status = \'DISABLED\', updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
   if (result.changes === 0) {
     throw new Error('Table not found');

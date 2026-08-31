@@ -87,11 +87,21 @@ export async function printKOT(items: KOTPrintItem[], tableName: string, orderNo
   await printHtml(html);
 }
 
+function parseBillDate(dateStr: string | undefined): string {
+  if (!dateStr) { return new Date().toLocaleString('en-PK', { timeZone: 'Asia/Karachi' }); }
+  const formatted = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T');
+  const dateObj = new Date(formatted.endsWith('Z') ? formatted : `${formatted}Z`);
+  return Number.isNaN(dateObj.getTime())
+    ? new Date().toLocaleString('en-PK', { timeZone: 'Asia/Karachi' })
+    : dateObj.toLocaleString('en-PK', { timeZone: 'Asia/Karachi' });
+}
+
 export async function printBill(bill: BillPrintPayload, orderItems: BillItemPrintPayload[], settings: OutletSettings): Promise<void> {
   const currency = bill.currency ?? settings.currency ?? 'PKR';
   const taxAmount = bill.tax_amount ?? ((bill.cgst_amount ?? 0) + (bill.sgst_amount ?? 0));
   const taxName = bill.tax_name ?? settings.tax_name ?? 'Tax';
   const addressLine = [settings.address, settings.city, settings.province].filter(Boolean).join(', ');
+  const billDate = parseBillDate(bill.date);
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
     @page { margin: 0; } body{font-family:'Courier New',monospace;font-size:13px;font-weight:bold;color:black;line-height:1.3;margin:0;padding:20px;background:#e5e7eb;display:flex;justify-content:center;min-height:100vh;box-sizing:border-box}.receipt{width:300px;background:#fff;padding:20px;box-shadow:0 4px 6px -1px rgba(0,0,0,.1)}@media print{body{padding:0;background:#fff;display:block;min-height:auto}.receipt{width:100%;padding:0;box-shadow:none;margin:0;max-width:none}}.text-center{text-align:center}.fw-bold{font-weight:bold}.fs-large{font-size:18px}.divider{border-bottom:2px dashed #000;margin:10px 0}.item,.summary-row{display:flex;justify-content:space-between;margin-bottom:4px}.item-name{flex:1;padding-right:10px}.item-qty{width:40px}.item-total{width:90px;text-align:right}
   </style></head><body><div class="receipt">
@@ -100,7 +110,7 @@ export async function printBill(bill: BillPrintPayload, orderItems: BillItemPrin
     ${settings.phone ? `<div class="text-center">${escapeHtml(settings.phone)}</div>` : ''}
     <div class="divider"></div>
     <div>Order/Bill: ${escapeHtml(bill.bill_number)}</div>
-    <div>Date: ${bill.date ? new Date(`${bill.date}Z`).toLocaleString('en-PK', { timeZone: 'Asia/Karachi' }) : new Date().toLocaleString('en-PK', { timeZone: 'Asia/Karachi' })}</div>
+    <div>Date: ${billDate}</div>
     <div class="divider"></div>
     ${orderItems.map(i => `<div class="item"><span class="item-name">${escapeHtml(i.name)}</span><span class="item-qty">${i.qty}x</span><span class="item-total">${formatCurrency(i.qty * i.unit_price, currency)}</span></div>`).join('')}
     <div class="divider"></div>

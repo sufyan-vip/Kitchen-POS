@@ -43,6 +43,10 @@ export function registerTablesIPC() {
     try {
       assertCurrentPermission('table_management');
       const db = getDB();
+      const activeOrder = db.prepare("SELECT order_number FROM orders WHERE table_id = ? AND status NOT IN ('COMPLETED','CANCELLED') LIMIT 1").get(id) as { order_number: string } | undefined;
+      if (activeOrder) {
+        return { success: false, error: `Cannot deactivate table with an active order (${activeOrder.order_number})` };
+      }
       db.prepare("UPDATE tables SET is_active = 0, status = 'DISABLED', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
       return { success: true };
     } catch (e: any) {

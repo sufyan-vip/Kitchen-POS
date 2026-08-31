@@ -3,6 +3,7 @@ import { getDB } from '../db';
 import { toMinorUnits } from '../services/money';
 import { writeAuditLog } from '../services/audit';
 import { findActiveShiftForTimestamp, recordCashPayment } from '../services/cash';
+import { assertCurrentPermission } from '../services/authz';
 
 interface CustomerRow {
   id: number;
@@ -36,6 +37,7 @@ function errMsg(e: unknown): string {
 export function registerCustomersIPC() {
   ipcMain.handle('customers:getAll', async () => {
     try {
+      assertCurrentPermission('customers_view');
       const db = getDB();
       const customers = db.prepare('SELECT * FROM customers ORDER BY name ASC').all();
       return { success: true, data: customers };
@@ -46,6 +48,7 @@ export function registerCustomersIPC() {
 
   ipcMain.handle('customers:getById', async (_, id: number) => {
     try {
+      assertCurrentPermission('customers_view');
       const db = getDB();
       const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(id) as CustomerRow | undefined;
       if (!customer) { return { success: false, error: 'Customer not found' }; }
@@ -57,6 +60,7 @@ export function registerCustomersIPC() {
 
   ipcMain.handle('customers:create', async (_, payload: { name: string; phone?: string; email?: string; credit_limit?: number }) => {
     try {
+      assertCurrentPermission('customers_manage');
       const db = getDB();
       const info = db.prepare(`
         INSERT INTO customers (name, phone, email, credit_limit)
@@ -74,6 +78,7 @@ export function registerCustomersIPC() {
 
   ipcMain.handle('customers:update', async (_, payload: { id: number; name: string; phone?: string; email?: string; credit_limit?: number }) => {
     try {
+      assertCurrentPermission('customers_manage');
       const db = getDB();
       db.prepare(`
         UPDATE customers SET name = ?, phone = ?, email = ?, credit_limit = ? WHERE id = ?
@@ -90,6 +95,7 @@ export function registerCustomersIPC() {
 
   ipcMain.handle('customers:delete', async (_, id: number) => {
     try {
+      assertCurrentPermission('customers_manage');
       const db = getDB();
       db.prepare('DELETE FROM customers WHERE id = ?').run(id);
       return { success: true };
@@ -100,6 +106,7 @@ export function registerCustomersIPC() {
 
   ipcMain.handle('customers:search', async (_, query: string) => {
     try {
+      assertCurrentPermission('customers_view');
       const db = getDB();
       const search = `%${query}%`;
       const customers = db.prepare(`
@@ -113,6 +120,7 @@ export function registerCustomersIPC() {
 
   ipcMain.handle('customers:settleBalance', async (_, payload: { customerId: number; amount: number; method: string }) => {
     try {
+      assertCurrentPermission('customers_manage');
       const db = getDB();
 
       const customer = db.prepare('SELECT outstanding_balance FROM customers WHERE id = ?').get(payload.customerId) as { outstanding_balance: number | null } | undefined;
@@ -162,6 +170,7 @@ export function registerCustomersIPC() {
 
   ipcMain.handle('customers:getHistory', async (_, customerId: number) => {
     try {
+      assertCurrentPermission('customers_view');
       const db = getDB();
       const bills = db.prepare(`
         SELECT b.id as bill_id, b.bill_number, b.total_amount, o.id as order_id, o.created_at

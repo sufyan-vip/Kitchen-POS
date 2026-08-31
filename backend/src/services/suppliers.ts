@@ -87,6 +87,7 @@ export function listPurchases(supplierId?: number, limit = 200): unknown[] {
 }
 
 export function getPurchaseItems(purchaseId: number): unknown[] {
+  assertCurrentPermission('purchasing_view');
   return db().prepare(`
     SELECT pi.*, ii.name AS item_name, ii.unit
     FROM purchase_items pi JOIN inventory_items ii ON ii.id = pi.inventory_item_id

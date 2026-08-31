@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, Tray, protocol, net } from 'electron';
+import { app, BrowserWindow, Menu, Tray, protocol, net, session } from 'electron';
 import * as path from 'path';
 import { runMigrations } from './db/migrate';
 import { getDB } from './db';
@@ -110,6 +110,15 @@ function registerAllIPC() {
 }
 
 void app.whenReady().then(async () => {
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': ["default-src 'self' 'unsafe-inline' local: blob: data:; img-src 'self' data: local: blob:;"],
+      },
+    });
+  });
+
   // Register custom protocol for local images
   protocol.handle('local', (request) => {
     return net.fetch(`file://${request.url.slice('local://'.length)}`);
