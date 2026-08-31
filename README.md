@@ -70,4 +70,3 @@ Merchant credentials must be obtained from official JazzCash/Easypaisa merchant/
 ## Data safety
 
 This is an existing application. Migration `014_pakistanization.sql` preserves legacy GST/HSN columns and creates backup copies of constrained staff/payment tables before recreating them. Use the built-in backup/export flow before applying migrations to production data.
-# test
