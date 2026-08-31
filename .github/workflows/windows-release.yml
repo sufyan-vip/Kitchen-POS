@@ -1,0 +1,103 @@
+name: Windows EXE Build
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    name: Build Kitchen POS Windows Installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Show environment
+        shell: pwsh
+        run: |
+          node --version
+          npm --version
+          git --version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild native dependencies for Electron
+        run: npx electron-builder install-app-deps
+
+      - name: Backend tests
+        run: npm test --prefix backend
+
+      - name: Frontend tests
+        run: npm test --prefix frontend
+
+      - name: Backend lint
+        run: npm run lint --prefix backend
+
+      - name: Frontend lint
+        run: npm run lint --prefix frontend
+
+      - name: Backend build
+        run: npm run build --prefix backend
+
+      - name: Frontend production build
+        run: npm run build --prefix frontend
+
+      - name: Build Windows NSIS installer
+        run: npm run package
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Verify EXE
+        shell: pwsh
+        run: |
+          Write-Host "Searching for Windows installers..."
+
+          $exeFiles = Get-ChildItem `
+            -Path ".\dist-electron" `
+            -Recurse `
+            -Filter "*.exe" `
+            -File
+
+          if ($exeFiles.Count -eq 0) {
+            Write-Error "No .exe installer was produced."
+            exit 1
+          }
+
+          Write-Host ""
+          Write-Host "EXE installer(s) found:"
+          $exeFiles | ForEach-Object {
+            Write-Host $_.FullName
+            Write-Host ("Size: {0:N2} MB" -f ($_.Length / 1MB))
+          }
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kitchen-POS-Windows-Installer
+          path: dist-electron/**/*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload unpacked Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kitchen-POS-Windows-Unpacked
+          path: dist-electron/win-unpacked/**
+          if-no-files-found: warn
+          retention-days: 7
