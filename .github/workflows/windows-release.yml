@@ -2,9 +2,6 @@ name: Windows EXE Build
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*"
 
 permissions:
   contents: read
@@ -15,77 +12,192 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout master
-        uses: actions/checkout@v4
+      # --------------------------------------------------
+      # 1. Checkout
+      # --------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v6
         with:
           ref: master
           fetch-depth: 0
 
+      # --------------------------------------------------
+      # 2. Setup Node
+      # --------------------------------------------------
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
 
+      # --------------------------------------------------
+      # 3. Setup Visual Studio / MSBuild
+      # --------------------------------------------------
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v3
+        with:
+          msbuild-architecture: x64
+
+      # --------------------------------------------------
+      # 4. Locate Visual Studio
+      # --------------------------------------------------
+      - name: Verify Visual Studio installation
+        shell: pwsh
+        run: |
+          Write-Host "Searching for Visual Studio..."
+
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+
+          if (-not (Test-Path $vswhere)) {
+            Write-Error "vswhere.exe was not found."
+            exit 1
+          }
+
+          & $vswhere -latest `
+            -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+            -property installationPath
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Visual Studio C++ build tools were not found."
+            exit 1
+          }
+
+      # --------------------------------------------------
+      # 5. Initialize MSVC developer environment
+      # --------------------------------------------------
+      - name: Setup MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      # --------------------------------------------------
+      # 6. Verify compiler
+      # --------------------------------------------------
+      - name: Verify C++ compiler
+        shell: cmd
+        run: |
+          where cl
+          cl
+
+      # --------------------------------------------------
+      # 7. Environment information
+      # --------------------------------------------------
       - name: Show environment
         shell: pwsh
         run: |
           node --version
           npm --version
           git --version
+          Write-Host "MSBuild:"
+          msbuild -version
 
+      # --------------------------------------------------
+      # 8. Install dependencies
+      # --------------------------------------------------
       - name: Install dependencies
         run: npm ci
+        env:
+          npm_config_msvs_version: "2022"
+          GYP_MSVS_VERSION: "2022"
 
+      # --------------------------------------------------
+      # 9. Verify Electron
+      # --------------------------------------------------
+      - name: Verify Electron package
+        shell: pwsh
+        run: |
+          node -e "console.log('Electron version:', require('./node_modules/electron/package.json').version)"
+
+      # --------------------------------------------------
+      # 10. Rebuild native dependencies for Electron
+      # --------------------------------------------------
       - name: Rebuild native dependencies for Electron
         run: npx electron-builder install-app-deps
+        env:
+          npm_config_msvs_version: "2022"
+          GYP_MSVS_VERSION: "2022"
 
+      # --------------------------------------------------
+      # 11. Backend tests
+      # --------------------------------------------------
       - name: Backend tests
         run: npm test --prefix backend
 
+      # --------------------------------------------------
+      # 12. Frontend tests
+      # --------------------------------------------------
       - name: Frontend tests
         run: npm test --prefix frontend
 
+      # --------------------------------------------------
+      # 13. Backend lint
+      # --------------------------------------------------
       - name: Backend lint
         run: npm run lint --prefix backend
 
+      # --------------------------------------------------
+      # 14. Frontend lint
+      # --------------------------------------------------
       - name: Frontend lint
         run: npm run lint --prefix frontend
 
+      # --------------------------------------------------
+      # 15. Backend build
+      # --------------------------------------------------
       - name: Backend build
         run: npm run build --prefix backend
 
+      # --------------------------------------------------
+      # 16. Frontend production build
+      # --------------------------------------------------
       - name: Frontend production build
         run: npm run build --prefix frontend
 
+      # --------------------------------------------------
+      # 17. Build Windows installer
+      # --------------------------------------------------
       - name: Build Windows NSIS installer
         run: npm run package
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          npm_config_msvs_version: "2022"
+          GYP_MSVS_VERSION: "2022"
 
-      - name: Verify EXE
+      # --------------------------------------------------
+      # 18. Verify EXE
+      # --------------------------------------------------
+      - name: Verify Windows installer
         shell: pwsh
         run: |
-          Write-Host "Searching for Windows installers..."
+          Write-Host "Searching for EXE files..."
 
           $exeFiles = Get-ChildItem `
             -Path ".\dist-electron" `
             -Recurse `
             -Filter "*.exe" `
-            -File
+            -File `
+            -ErrorAction SilentlyContinue
 
-          if ($exeFiles.Count -eq 0) {
-            Write-Error "No .exe installer was produced."
+          if (-not $exeFiles -or $exeFiles.Count -eq 0) {
+            Write-Error "No Windows .exe installer was produced."
             exit 1
           }
 
           Write-Host ""
-          Write-Host "EXE installer(s) found:"
-          $exeFiles | ForEach-Object {
-            Write-Host $_.FullName
-            Write-Host ("Size: {0:N2} MB" -f ($_.Length / 1MB))
+          Write-Host "========================================"
+          Write-Host "WINDOWS INSTALLER FOUND"
+          Write-Host "========================================"
+
+          foreach ($file in $exeFiles) {
+            Write-Host ""
+            Write-Host "File: $($file.FullName)"
+            Write-Host ("Size: {0:N2} MB" -f ($file.Length / 1MB))
           }
 
+      # --------------------------------------------------
+      # 19. Upload installer
+      # --------------------------------------------------
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
@@ -94,6 +206,9 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      # --------------------------------------------------
+      # 20. Upload unpacked application
+      # --------------------------------------------------
       - name: Upload unpacked Windows build
         uses: actions/upload-artifact@v4
         with:
