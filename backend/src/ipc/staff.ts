@@ -28,6 +28,31 @@ function staffPinMatches(row: StaffRow, candidate: string): boolean {
   return row.pin !== null && row.pin === candidate;
 }
 
+/**
+ * Guard against locking every administrator out of the till: at least one
+ * active admin must always remain. `excludeId` is the row being changed.
+ */
+function assertAdminRemains(db: ReturnType<typeof getDB>, excludeId: number): void {
+  const row = db.prepare(
+    "SELECT COUNT(*) AS count FROM staff WHERE role = 'admin' AND is_active = 1 AND id != ?"
+  ).get(excludeId) as { count: number };
+  if (row.count === 0) {
+    throw new Error('At least one active admin is required — promote another user first.');
+  }
+}
+
+// Brute-force protection for PIN entry. PINs are short by design, so repeated
+// failures are throttled process-wide (the till is a single shared terminal).
+const MAX_LOGIN_ATTEMPTS = 8;
+const LOGIN_LOCKOUT_MS = 60 * 1000;
+let failedLoginAttempts = 0;
+let loginLockedUntilMs = 0;
+
+export function resetLoginRateLimit(): void {
+  failedLoginAttempts = 0;
+  loginLockedUntilMs = 0;
+}
+
 /** Migrate a legacy plaintext-PIN row to the hashed form after a successful login. */
 function migrateToHashedPin(db: ReturnType<typeof getDB>, staffId: number, pin: string): void {
   const salt = generateSalt();
@@ -44,11 +69,17 @@ function applyHashedPin(db: ReturnType<typeof getDB>, staffId: number, pin: stri
 export function registerStaffIPC() {
   ipcMain.handle('staff:login', async (_event, payload: { pin: unknown }) => {
     try {
+      const now = Date.now();
+      if (now < loginLockedUntilMs) {
+        const secondsLeft = Math.ceil((loginLockedUntilMs - now) / 1000);
+        return { success: false, error: `Too many failed attempts. Try again in ${secondsLeft}s.` };
+      }
       const db = getDB();
       const candidate = asText(payload.pin);
       const rows = db.prepare('SELECT id, name, role, is_active, pin, pin_hash, pin_salt FROM staff WHERE is_active = 1').all() as StaffRow[];
       const user = rows.find(r => staffPinMatches(r, candidate));
       if (user) {
+        resetLoginRateLimit();
         setCurrentRole(user.role);
         setCurrentStaffId(user.id);
         if (!user.pin_hash) {
@@ -56,6 +87,11 @@ export function registerStaffIPC() {
         }
         writeAuditLog(db, { action: 'login', entityType: 'staff', entityId: user.id, details: { success: true } });
         return { success: true, data: publicStaff(user) };
+      }
+      failedLoginAttempts += 1;
+      if (failedLoginAttempts >= MAX_LOGIN_ATTEMPTS) {
+        loginLockedUntilMs = Date.now() + LOGIN_LOCKOUT_MS;
+        failedLoginAttempts = 0;
       }
       writeAuditLog(db, { action: 'login_failed', entityType: 'staff', details: { success: false } });
       return { success: false, error: 'Invalid PIN' };
@@ -100,6 +136,11 @@ export function registerStaffIPC() {
       const salt = generateSalt();
       const pinHash = hashPin(pin, salt);
       if (payload.id) {
+        const existing = db.prepare('SELECT role, is_active FROM staff WHERE id = ?').get(payload.id) as { role: string; is_active: number } | undefined;
+        if (!existing) { throw new Error('Staff not found'); }
+        if (existing.role === 'admin' && existing.is_active === 1 && role !== 'admin') {
+          assertAdminRemains(db, payload.id);
+        }
         const stmt = db.prepare('UPDATE staff SET name = ?, role = ?, pin_hash = ?, pin_salt = ?, pin = NULL WHERE id = ?');
         const info = stmt.run(name, role, pinHash, salt, payload.id);
         if (info.changes === 0) { throw new Error('Staff not found'); }
@@ -120,6 +161,11 @@ export function registerStaffIPC() {
     try {
       assertCurrentPermission('staff');
       const db = getDB();
+      const target = db.prepare('SELECT role, is_active FROM staff WHERE id = ?').get(payload.id) as { role: string; is_active: number } | undefined;
+      if (!target) { return { success: false, error: 'Staff not found' }; }
+      if (target.role === 'admin' && target.is_active === 1) {
+        assertAdminRemains(db, payload.id);
+      }
       const stmt = db.prepare('UPDATE staff SET is_active = 0 WHERE id = ?');
       const info = stmt.run(payload.id);
       if (info.changes > 0) {

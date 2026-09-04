@@ -6,6 +6,7 @@
     "dev": "tsc --watch",
     "build": "tsc",
     "lint": "eslint .",
+    "pretest": "node scripts/ensure-sqlite-abi.mjs",
     "test": "vitest run"
   },
   "dependencies": {

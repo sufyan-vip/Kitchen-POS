@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="S Restaurant">
+  <title>S Restaurant</title>
+  <defs>
+    <linearGradient id="sr-bg" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0%" stop-color="#12704a"/>
+      <stop offset="100%" stop-color="#053723"/>
+    </linearGradient>
+    <linearGradient id="sr-gold" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0%" stop-color="#f7e2ad"/>
+      <stop offset="42%" stop-color="#e2b95c"/>
+      <stop offset="100%" stop-color="#b98526"/>
+    </linearGradient>
+    <mask id="sr-crescent">
+      <rect width="256" height="256" fill="black"/>
+      <circle cx="120" cy="132" r="70" fill="white"/>
+      <circle cx="150" cy="120" r="64" fill="black"/>
+    </mask>
+  </defs>
+
+  <!-- Badge -->
+  <rect x="3" y="3" width="250" height="250" rx="58" fill="url(#sr-bg)"/>
+  <rect x="12" y="12" width="232" height="232" rx="49" fill="none" stroke="url(#sr-gold)" stroke-width="2.4"/>
+
+  <!-- Mughal ogee arch panel -->
+  <path d="M64 208V128c0-20 12-33 26-40 12-6 20-14 38-30 18 16 26 24 38 30 14 7 26 20 26 40v80"
+        fill="none" stroke="#57b98b" stroke-width="2.2" opacity="0.55" stroke-linejoin="round"/>
+  <path d="M64 208h128" fill="none" stroke="#57b98b" stroke-width="2.2" opacity="0.55"/>
+
+  <!-- Crescent -->
+  <rect width="256" height="256" fill="#57b98b" opacity="0.45" mask="url(#sr-crescent)"/>
+
+  <!-- Crest: fork · crescent · knife -->
+  <g fill="url(#sr-gold)">
+    <!-- fork -->
+    <path d="M99 32h2.4v9h1.6v-9h2.4v9h1.6v-9h2.4v11.5c0 2.6-1.4 4.3-3.2 4.9V64h-3.2V48.4c-1.8-.6-3.2-2.3-3.2-4.9Z"/>
+    <!-- knife -->
+    <path d="M150 32c3.4 2.6 5.2 6.6 5.2 11 0 3.4-1.4 6-3.4 7.4V64h-3.2V50.4c-2-1.4-3.4-4-3.4-7.4 0-4.4 1.8-8.4 4.8-11Z"/>
+  </g>
+  <path d="M128 34a11 11 0 1 0 8.4 18.1A13.6 13.6 0 1 1 128 34Z" fill="url(#sr-gold)"/>
+  <circle cx="140" cy="36.5" r="2.4" fill="url(#sr-gold)"/>
+
+  <!-- S monogram -->
+  <text x="128" y="182" text-anchor="middle"
+        font-family="Georgia, 'Times New Roman', serif" font-size="132" font-weight="700"
+        fill="url(#sr-gold)">S</text>
+
+  <!-- Wordmark -->
+  <text x="128" y="226" text-anchor="middle"
+        font-family="Georgia, 'Times New Roman', serif" font-size="19.5" letter-spacing="2.4"
+        fill="url(#sr-gold)">S RESTAURANT</text>
+</svg>

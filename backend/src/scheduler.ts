@@ -2,18 +2,25 @@ import { getDB } from './db';
 import { BrowserWindow } from 'electron';
 import { performAutoBackup, shouldFireReminder, markReminderFired } from './ipc/backup';
 
+const timers: NodeJS.Timeout[] = [];
+
 export function startScheduler() {
+  stopScheduler();
+
   // Menu schedule check — every minute
-  setInterval(() => {
-    checkMenuSchedules();
-  }, 60000);
-  setTimeout(checkMenuSchedules, 5000);
+  timers.push(setInterval(() => { checkMenuSchedules(); }, 60000));
+  timers.push(setTimeout(checkMenuSchedules, 5000));
 
   // Backup reminder + auto-backup check — every minute
-  setInterval(() => {
-    checkAutoBackupAndReminder();
-  }, 60000);
-  setTimeout(checkAutoBackupAndReminder, 10000);
+  timers.push(setInterval(() => { checkAutoBackupAndReminder(); }, 60000));
+  timers.push(setTimeout(checkAutoBackupAndReminder, 10000));
+}
+
+export function stopScheduler(): void {
+  while (timers.length > 0) {
+    const timer = timers.pop();
+    if (timer) { clearTimeout(timer); clearInterval(timer); }
+  }
 }
 
 function checkMenuSchedules() {
@@ -73,23 +80,32 @@ function checkMenuSchedules() {
 function notifyFrontend(menuId: number, menuName: string, action: 'enabled' | 'disabled') {
   const windows = BrowserWindow.getAllWindows();
   for (const win of windows) {
-    win.webContents.send('menu:scheduleTriggered', { menuId, menuName, action });
+    if (!win.isDestroyed()) {
+      win.webContents.send('menu:scheduleTriggered', { menuId, menuName, action });
+    }
   }
 }
 
 function checkAutoBackupAndReminder(): void {
-  // Backup reminder
-  if (shouldFireReminder()) {
-    markReminderFired();
-    const windows = BrowserWindow.getAllWindows();
-    for (const win of windows) {
-      win.webContents.send('backup:reminderDue');
+  // An unhandled throw inside a setInterval callback crashes the main process,
+  // so this whole check is defensive.
+  try {
+    // Backup reminder
+    if (shouldFireReminder()) {
+      markReminderFired();
+      const windows = BrowserWindow.getAllWindows();
+      for (const win of windows) {
+        win.webContents.send('backup:reminderDue');
+      }
     }
-  }
 
-  // Auto-backup runs at midnight (00:00)
-  const now = new Date();
-  if (now.getHours() === 0 && now.getMinutes() === 0) {
-    void performAutoBackup();
+    // Auto-backup. performAutoBackup() decides whether one is actually due
+    // from `lastBackupAt`; the previous exact 00:00 check silently skipped the
+    // backup whenever the PC was asleep or shut down at midnight.
+    void performAutoBackup().catch((e: unknown) => {
+      console.error('Scheduled auto-backup failed:', e instanceof Error ? e.message : e);
+    });
+  } catch (error) {
+    console.error('Error in checkAutoBackupAndReminder:', error);
   }
 }

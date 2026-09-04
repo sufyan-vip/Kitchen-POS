@@ -1,4 +1,5 @@
 import { Button } from '../../../components/atoms';
+import logoUrl from '../../../assets/logo.svg';
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { SvgIcon } from '../../../components/atoms/svg-sprite-loader';
@@ -87,9 +88,13 @@ const Sidebar: React.FC<SidebarProps> = ({
       <div className="flex items-center h-[72px] px-3 shrink-0 overflow-hidden border-b border-white/10">
 
         {/* Logo icon — always visible */}
-        <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
-          <span className="text-lg font-bold text-white">KP</span>
-        </div>
+        <img
+          src={logoUrl}
+          alt="S Restaurant"
+          width={40}
+          height={40}
+          className="w-10 h-10 rounded-xl shrink-0 object-contain"
+        />
 
         {/* App name — animate in/out with max-w trick */}
         <span className={[
@@ -97,7 +102,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           'transition-all duration-300 ease-in-out',
           isEffectivelyExpanded ? 'max-w-[150px] opacity-100' : 'max-w-0 opacity-0',
         ].join(' ')}>
-          Kitchen POS
+          S Restaurant
         </span>
 
         {/* Pin/unpin toggle — desktop + pointer device + currently expanded only */}

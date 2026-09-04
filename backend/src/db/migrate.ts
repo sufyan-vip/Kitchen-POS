@@ -19,9 +19,11 @@ export function runMigrations() {
     ? path.join(process.resourcesPath, 'migrations')
     : path.join(__dirname, '../../src/db/migrations');
     
+  // A missing migrations directory means a broken package. Returning quietly
+  // used to leave the app running against an empty schema, so every screen
+  // failed with a confusing "no such table" instead of one clear error.
   if (!fs.existsSync(migrationsDir)) {
-    console.error('Migrations directory not found:', migrationsDir);
-    return;
+    throw new Error(`Migrations directory not found: ${migrationsDir}`);
   }
 
   const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
@@ -44,6 +46,10 @@ export function runMigrations() {
           db.exec(sql);
           db.prepare('INSERT INTO _migrations (filename) VALUES (?)').run(file);
         })();
+      } catch (e) {
+        // Name the offending file — "SQLITE_ERROR: near ..." on its own is
+        // impossible to diagnose from a user's crash report.
+        throw new Error(`Migration ${file} failed: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
       } finally {
         db.pragma('foreign_keys = ON');
       }

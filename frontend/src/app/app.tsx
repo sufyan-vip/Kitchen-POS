@@ -19,8 +19,10 @@ import QuickActionsFAB from 'components/organisms/quick-actions-fab';
 const GlobalListeners = () => {
   const { showToast } = useToast();
 
+  // Each subscription is torn down on cleanup — otherwise every re-run of the
+  // effect stacked another listener and the toast fired once per listener.
   React.useEffect(() => {
-    api.onMenuScheduleTriggered((data: { menuId: number; menuName: string; action: 'enabled' | 'disabled' }) => {
+    return api.onMenuScheduleTriggered((data: { menuId: number; menuName: string; action: 'enabled' | 'disabled' }) => {
       showToast({
         message: `Scheduled Menu: ${data.menuName} has been automatically ${data.action}.`,
         variant: 'info',
@@ -30,7 +32,7 @@ const GlobalListeners = () => {
   }, [showToast]);
 
   React.useEffect(() => {
-    api.onBackupReminder(() => {
+    return api.onBackupReminder(() => {
       showToast({
         message: 'Reminder: Back up your data to prevent loss.',
         variant: 'info',
@@ -38,6 +40,13 @@ const GlobalListeners = () => {
       });
     });
   }, [showToast]);
+
+  // Settings saved in the main process (or another window) refresh the UI.
+  React.useEffect(() => {
+    return api.onSettingsUpdated(() => {
+      window.dispatchEvent(new Event('settings-updated'));
+    });
+  }, []);
 
   return null;
 };

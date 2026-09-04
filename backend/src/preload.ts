@@ -207,10 +207,22 @@ contextBridge.exposeInMainWorld('api', {
   auth: {
     check: (payload: any) => ipcRenderer.invoke('auth:check', payload),
   },
+  // Event subscriptions return an unsubscribe function. Without it, every
+  // re-render that re-ran the subscribing effect added another ipcRenderer
+  // listener and the same toast fired repeatedly.
   onBackupReminder: (callback: () => void) => {
-    ipcRenderer.on('backup:reminderDue', () => { callback(); });
+    const listener = () => { callback(); };
+    ipcRenderer.on('backup:reminderDue', listener);
+    return () => { ipcRenderer.removeListener('backup:reminderDue', listener); };
   },
   onMenuScheduleTriggered: (callback: (data: any) => void) => {
-    ipcRenderer.on('menu:scheduleTriggered', (_event, value) => { callback(value); });
-  }
+    const listener = (_event: unknown, value: any) => { callback(value); };
+    ipcRenderer.on('menu:scheduleTriggered', listener);
+    return () => { ipcRenderer.removeListener('menu:scheduleTriggered', listener); };
+  },
+  onSettingsUpdated: (callback: () => void) => {
+    const listener = () => { callback(); };
+    ipcRenderer.on('settings-updated', listener);
+    return () => { ipcRenderer.removeListener('settings-updated', listener); };
+  },
 });

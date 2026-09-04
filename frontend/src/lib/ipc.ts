@@ -303,12 +303,15 @@ const mockApi = {
   auth: {
     check: () => Promise.resolve({ success: true, data: true }),
   },
-  onBackupReminder: (_callback: () => void) => {
-    // mock: no-op
+  onBackupReminder: (_callback: () => void) => () => {
+    // mock: no-op unsubscribe
   },
-  onMenuScheduleTriggered: (_callback: (data: { menuId: number; menuName: string; action: 'enabled' | 'disabled' }) => void) => {
-    // mock implementation does nothing
-  }
+  onMenuScheduleTriggered: (_callback: (data: { menuId: number; menuName: string; action: 'enabled' | 'disabled' }) => void) => () => {
+    // mock: no-op unsubscribe
+  },
+  onSettingsUpdated: (_callback: () => void) => () => {
+    // mock: no-op unsubscribe
+  },
 };
 
 // Mock IPC is only allowed in tests (Vitest) or when the developer opts in
@@ -554,6 +557,10 @@ export const api = resolvedApi as {
   auth: {
     check: (payload: { permission: string }) => Promise<IPCResponse<boolean>>;
   };
-  onBackupReminder: (callback: () => void) => void;
-  onMenuScheduleTriggered: (callback: (data: { menuId: number; menuName: string; action: 'enabled' | 'disabled' }) => void) => void;
+  /** Subscribes to the backup reminder. Returns an unsubscribe function. */
+  onBackupReminder: (callback: () => void) => () => void;
+  /** Subscribes to menu schedule changes. Returns an unsubscribe function. */
+  onMenuScheduleTriggered: (callback: (data: { menuId: number; menuName: string; action: 'enabled' | 'disabled' }) => void) => () => void;
+  /** Subscribes to settings changes broadcast by the main process. Returns an unsubscribe function. */
+  onSettingsUpdated: (callback: () => void) => () => void;
 };

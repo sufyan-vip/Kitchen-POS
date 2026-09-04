@@ -1,12 +1,12 @@
 import { ipcMain, dialog, app } from 'electron';
-import { getDB } from '../db';
+import { getDB, closeDB } from '../db';
 import * as fs from 'fs';
 import * as path from 'path';
-import Store from 'electron-store';
 import { pruneOldBackups, formatLocalDate, checkShouldFireReminder, type BackupReminderConfig } from './backup-utils';
 import archiver from 'archiver';
 import extractZip from 'extract-zip';
 import { assertCurrentPermission } from '../services/authz';
+import { getSettingsStore } from '../services/settings';
 
 interface AutoBackupConfig {
   enabled: boolean;
@@ -33,38 +33,67 @@ const DEFAULT_REMINDER: BackupReminderConfig = {
   lastRemindedDate: null,
 };
 
-export async function performAutoBackup(): Promise<void> {
-  const store = new Store();
-  const config = store.get('autoBackup', DEFAULT_AUTO_BACKUP) as AutoBackupConfig;
-  if (!config.enabled) { return; }
+/**
+ * True when a scheduled backup has not run yet for the current period.
+ * Comparing against `lastBackupAt` (instead of firing only at exactly 00:00)
+ * means a machine that was switched off overnight still backs up on the next
+ * launch, and a machine left running never backs up twice for the same day.
+ */
+export function isAutoBackupDue(config: AutoBackupConfig, now: Date): boolean {
+  if (!config.enabled) { return false; }
+  if (!config.lastBackupAt) { return true; }
+  const last = new Date(config.lastBackupAt);
+  if (Number.isNaN(last.getTime())) { return true; }
+  if (config.frequency === 'weekly') {
+    return now.getTime() - last.getTime() >= 7 * 24 * 60 * 60 * 1000;
+  }
+  return formatLocalDate(last) !== formatLocalDate(now);
+}
 
+export async function performAutoBackup(options: { force?: boolean } = {}): Promise<string> {
+  const store = getSettingsStore();
+  const config = store.get('autoBackup', DEFAULT_AUTO_BACKUP) as AutoBackupConfig;
   const now = new Date();
-  if (config.frequency === 'weekly' && now.getDay() !== config.dayOfWeek) { return; }
+
+  if (!options.force) {
+    if (!config.enabled) { return ''; }
+    if (!isAutoBackupDue(config, now)) { return ''; }
+  }
 
   const db = getDB();
   const backupDir = config.path ?? app.getPath('userData');
+  fs.mkdirSync(backupDir, { recursive: true });
   const ts = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const backupPath = path.join(backupDir, `kitchen-pos-backup-${ts}.zip`);
   const tempDbPath = path.join(app.getPath('temp'), `pos-temp-${Date.now()}.db`);
 
   try {
     await db.backup(tempDbPath);
-    
+
     await new Promise<void>((resolve, reject) => {
       const output = fs.createWriteStream(backupPath);
-      const createArchive = archiver as any;
+      const createArchive = archiver as unknown as (format: string, options: unknown) => {
+        on: (event: string, cb: (err: Error) => void) => void;
+        pipe: (dest: fs.WriteStream) => void;
+        file: (file: string, options: { name: string }) => void;
+        directory: (dir: string, name: string) => void;
+        finalize: () => Promise<void>;
+      };
       const archive = createArchive('zip', { zlib: { level: 9 } });
       output.on('close', () => { resolve(); });
+      // Without this listener a disk-full/permission failure emits an
+      // unhandled 'error' event and takes down the main process.
+      output.on('error', (err: Error) => { reject(err); });
       archive.on('error', (err: Error) => { reject(err); });
-      
+
       archive.pipe(output);
       archive.file(tempDbPath, { name: 'pos.db' });
-      
+
       const imagesDir = path.join(app.getPath('userData'), 'images');
       if (fs.existsSync(imagesDir)) {
         archive.directory(imagesDir, 'images');
       }
-      
+
       void archive.finalize();
     });
 
@@ -74,22 +103,25 @@ export async function performAutoBackup(): Promise<void> {
 
     store.set('autoBackup', { ...config, lastBackupAt: now.toISOString() });
     pruneOldBackups(backupDir, 7);
+    return backupPath;
   } catch (e: unknown) {
     if (fs.existsSync(tempDbPath)) {
       try { fs.unlinkSync(tempDbPath); } catch (_err) { /* ignore */ }
     }
     console.error('Auto-backup failed:', e instanceof Error ? e.message : e);
+    // Re-thrown so "Backup now" reports the failure instead of claiming success.
+    throw e instanceof Error ? e : new Error('Auto-backup failed');
   }
 }
 
 export function shouldFireReminder(): boolean {
-  const store = new Store();
+  const store = getSettingsStore();
   const config = store.get('backupReminder', DEFAULT_REMINDER) as BackupReminderConfig;
   return checkShouldFireReminder(config, new Date());
 }
 
 export function markReminderFired(): void {
-  const store = new Store();
+  const store = getSettingsStore();
   const config = store.get('backupReminder', DEFAULT_REMINDER) as BackupReminderConfig;
   const todayStr = formatLocalDate(new Date());
   store.set('backupReminder', { ...config, lastRemindedDate: todayStr });
@@ -184,8 +216,11 @@ export function registerBackupIPC() {
       const userDataPath = app.getPath('userData');
       const dbPath = path.join(userDataPath, 'pos.db');
 
-      const db = getDB();
-      db.close();
+      // closeDB() clears the cached handle. Calling db.close() directly left
+      // the module-level singleton pointing at a closed connection, so every
+      // later query threw "The database connection is not open" if anything
+      // after this point failed and the relaunch never happened.
+      closeDB();
 
       fs.copyFileSync(extractedDbPath, dbPath);
 
@@ -232,7 +267,7 @@ export function registerBackupIPC() {
   });
 
   ipcMain.handle('backup:getAutoBackupConfig', async () => {
-    const store = new Store();
+    const store = getSettingsStore();
     return {
       success: true,
       data: {
@@ -245,7 +280,7 @@ export function registerBackupIPC() {
   ipcMain.handle('backup:setAutoBackupConfig', async (_, payload: { autoBackup?: Partial<AutoBackupConfig>; backupReminder?: Partial<BackupReminderConfig> }) => {
     try {
       assertCurrentPermission('settings');
-      const store = new Store();
+      const store = getSettingsStore();
       if (payload.autoBackup) {
         const current = store.get('autoBackup', DEFAULT_AUTO_BACKUP) as AutoBackupConfig;
         store.set('autoBackup', { ...current, ...payload.autoBackup });
@@ -277,8 +312,10 @@ export function registerBackupIPC() {
   ipcMain.handle('backup:triggerNow', async () => {
     try {
       assertCurrentPermission('settings');
-      await performAutoBackup();
-      return { success: true };
+      // Forced: a manual "Backup now" must run even when the schedule is off
+      // or a backup already ran today (previously it silently did nothing).
+      const backupPath = await performAutoBackup({ force: true });
+      return { success: true, data: backupPath };
     } catch (e: unknown) {
       return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
     }

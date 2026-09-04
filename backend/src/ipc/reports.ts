@@ -1,8 +1,8 @@
 import { ipcMain } from 'electron';
-import Store from 'electron-store';
 import { getDB } from '../db';
 import { printBill } from '../services/printer';
 import { assertCurrentPermission } from '../services/authz';
+import { getSettingsStore } from '../services/settings';
 import { getLowStockItems } from '../services/inventory-service';
 import { getAppTimezone, makeTrendBucket, reportRangeUtc, sqliteUtc, zonedDateStr, zonedMidnightUtcMs, shiftDateStr } from '../services/timezone';
 
@@ -190,17 +190,18 @@ export function registerReportsIPC() {
     try {
       assertCurrentPermission('reports');
       const db = getDB();
-      const range = dateRange(payload.filter, payload.start, payload.end).condition.replace(/created_at/g, 'o.created_at');
+      const range = dateRange(payload.filter, payload.start, payload.end);
+      const rangeCondition = range.condition.replace(/created_at/g, 'o.created_at');
       const safeLimit = Math.min(Math.max(Math.trunc(payload.limit ?? 25), 1), 100);
       const rows = db.prepare(`
         SELECT oi.menu_item_id, oi.name, SUM(oi.qty) AS qty, COALESCE(SUM(oi.line_total_minor), 0) AS revenue_minor
         FROM order_items oi
         JOIN orders o ON o.id = oi.order_id
-        WHERE o.status = 'COMPLETED' AND ${range}
+        WHERE o.status = 'COMPLETED' AND ${rangeCondition}
         GROUP BY oi.menu_item_id, oi.name
         ORDER BY qty DESC
         LIMIT ?
-      `).all(safeLimit) as Array<{ menu_item_id: number; name: string; qty: number; revenue_minor: number }>;
+      `).all(...range.params, safeLimit) as Array<{ menu_item_id: number; name: string; qty: number; revenue_minor: number }>;
       return { success: true, data: rows.map(r => ({ ...r, revenue: r.revenue_minor / 100 })) };
     } catch (e: unknown) {
       return { success: false, error: e instanceof Error ? e.message : 'Unknown error occurred' };
@@ -212,7 +213,8 @@ export function registerReportsIPC() {
     try {
       assertCurrentPermission('reports');
       const db = getDB();
-      const range = dateRange(payload.filter, payload.start, payload.end).condition.replace(/created_at/g, 'o.created_at');
+      const range = dateRange(payload.filter, payload.start, payload.end);
+      const rangeCondition = range.condition.replace(/created_at/g, 'o.created_at');
       const rows = db.prepare(`
         SELECT c.name AS category, COUNT(DISTINCT o.id) AS orders,
                SUM(oi.qty) AS qty, COALESCE(SUM(oi.line_total_minor), 0) AS revenue_minor
@@ -220,10 +222,10 @@ export function registerReportsIPC() {
         JOIN orders o ON o.id = oi.order_id
         JOIN menu_items mi ON mi.id = oi.menu_item_id
         JOIN categories c ON c.id = mi.category_id
-        WHERE o.status = 'COMPLETED' AND ${range}
+        WHERE o.status = 'COMPLETED' AND ${rangeCondition}
         GROUP BY c.id, c.name
         ORDER BY revenue_minor DESC
-      `).all() as Array<{ category: string; orders: number; qty: number; revenue_minor: number }>;
+      `).all(...range.params) as Array<{ category: string; orders: number; qty: number; revenue_minor: number }>;
       return { success: true, data: rows.map(r => ({ ...r, revenue: r.revenue_minor / 100 })) };
     } catch (e: unknown) {
       return { success: false, error: e instanceof Error ? e.message : 'Unknown error occurred' };
@@ -235,13 +237,14 @@ export function registerReportsIPC() {
     try {
       assertCurrentPermission('reports');
       const db = getDB();
-      const range = dateRange(payload.filter, payload.start, payload.end).condition.replace(/created_at/g, 'o.created_at');
+      const range = dateRange(payload.filter, payload.start, payload.end);
+      const rangeCondition = range.condition.replace(/created_at/g, 'o.created_at');
       const rows = db.prepare(`
         SELECT oi.modifier_snapshot
         FROM order_items oi
         JOIN orders o ON o.id = oi.order_id
-        WHERE o.status = 'COMPLETED' AND ${range} AND oi.modifier_snapshot IS NOT NULL
-      `).all() as Array<{ modifier_snapshot: string }>;
+        WHERE o.status = 'COMPLETED' AND ${rangeCondition} AND oi.modifier_snapshot IS NOT NULL
+      `).all(...range.params) as Array<{ modifier_snapshot: string }>;
       const counts = new Map<string, { name: string; group: string; qty: number; revenue_minor: number }>();
       for (const row of rows) {
         let parsed: Array<{ id: number; group_name: string; name: string; price_minor: number; qty: number }> = [];
@@ -266,17 +269,18 @@ export function registerReportsIPC() {
     try {
       assertCurrentPermission('reports');
       const db = getDB();
-      const range = dateRange(payload.filter, payload.start, payload.end).condition.replace(/created_at/g, 'o.created_at');
+      const range = dateRange(payload.filter, payload.start, payload.end);
+      const rangeCondition = range.condition.replace(/created_at/g, 'o.created_at');
       const rows = db.prepare(`
         SELECT t.name AS table_name, COUNT(o.id) AS orders,
                COALESCE(SUM(o.total_minor), 0) AS revenue_minor,
                COALESCE(SUM(o.covers), 0) AS covers
         FROM orders o
         JOIN tables t ON t.id = o.table_id
-        WHERE o.status = 'COMPLETED' AND ${range}
+        WHERE o.status = 'COMPLETED' AND ${rangeCondition}
         GROUP BY t.id, t.name
         ORDER BY orders DESC
-      `).all() as Array<{ table_name: string; orders: number; revenue_minor: number; covers: number }>;
+      `).all(...range.params) as Array<{ table_name: string; orders: number; revenue_minor: number; covers: number }>;
       return { success: true, data: rows.map(r => ({ ...r, revenue: r.revenue_minor / 100 })) };
     } catch (e: unknown) {
       return { success: false, error: e instanceof Error ? e.message : 'Unknown error occurred' };
@@ -288,26 +292,33 @@ export function registerReportsIPC() {
     try {
       assertCurrentPermission('reports');
       const db = getDB();
-      const range = dateRange(payload.filter, payload.start, payload.end).condition.replace(/created_at/g, 'k.created_at');
+      const range = dateRange(payload.filter, payload.start, payload.end);
+      const rangeCondition = range.condition.replace(/created_at/g, 'k.created_at');
       const summary = db.prepare(`
         SELECT COUNT(*) AS total_kots,
                SUM(CASE WHEN k.status IN ('NEW','PREPARING','READY') THEN 1 ELSE 0 END) AS pending_kots,
                SUM(CASE WHEN k.status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed_kots,
                SUM(CASE WHEN k.status = 'CANCELLED' THEN 1 ELSE 0 END) AS cancelled_kots
-        FROM kots k WHERE ${range}
-      `).get() as { total_kots: number; pending_kots: number; completed_kots: number; cancelled_kots: number };
-      // Average preparation time: KOT creation → first item prepared
+        FROM kots k WHERE ${rangeCondition}
+      `).get(...range.params) as { total_kots: number; pending_kots: number; completed_kots: number; cancelled_kots: number };
+      // Average preparation time: KOT creation → first item prepared.
+      // MIN() has to be aggregated in a subquery: nesting it inside AVG() made
+      // SQLite reject the statement with "misuse of aggregate function MIN()".
       const prep = db.prepare(`
-        SELECT AVG((julianday(MIN(oi.prepared_at)) - julianday(k.created_at)) * 1440) AS avg_minutes
+        SELECT (julianday(first_prep.first_prepared_at) - julianday(k.created_at)) * 1440 AS minutes
         FROM kots k
-        JOIN order_items oi ON oi.order_id = k.order_id AND oi.kot_number = k.kot_number AND oi.prepared_at IS NOT NULL
-        WHERE ${range}
-        GROUP BY k.id
-      `).all() as Array<{ avg_minutes: number | null }>;
-      const valid = prep.filter(p => p.avg_minutes !== null).map(p => p.avg_minutes as number);
+        JOIN (
+          SELECT order_id, kot_number, MIN(prepared_at) AS first_prepared_at
+          FROM order_items
+          WHERE prepared_at IS NOT NULL
+          GROUP BY order_id, kot_number
+        ) first_prep ON first_prep.order_id = k.order_id AND first_prep.kot_number = k.kot_number
+        WHERE ${rangeCondition}
+      `).all(...range.params) as Array<{ minutes: number | null }>;
+      const valid = prep.map(p => p.minutes).filter((m): m is number => m !== null && Number.isFinite(m));
       const avgPrepMinutes = valid.length > 0 ? valid.reduce((s, v) => s + v, 0) / valid.length : 0;
       const hourBucket = makeTrendBucket('%H', getAppTimezone());
-      const kotRows = db.prepare(`SELECT created_at FROM kots k WHERE ${range}`).all() as Array<{ created_at: string }>;
+      const kotRows = db.prepare(`SELECT k.created_at FROM kots k WHERE ${rangeCondition}`).all(...range.params) as Array<{ created_at: string }>;
       const hourCounts = new Map<string, number>();
       for (const row of kotRows) {
         const label = hourBucket(row.created_at);
@@ -460,7 +471,7 @@ export function registerReportsIPC() {
         SELECT name, qty, unit_price FROM order_items WHERE order_id = ?
       `).all(payload.orderId) as Array<{ name: string; qty: number; unit_price: number }>;
 
-      const store = new Store();
+      const store = getSettingsStore();
       const settings = {
         restaurant_name: store.get('restaurant_name') as string,
         outlet_name: store.get('outlet_name') as string,

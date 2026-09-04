@@ -105,7 +105,7 @@ export async function printBill(bill: BillPrintPayload, orderItems: BillItemPrin
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
     @page { margin: 0; } body{font-family:'Courier New',monospace;font-size:13px;font-weight:bold;color:black;line-height:1.3;margin:0;padding:20px;background:#e5e7eb;display:flex;justify-content:center;min-height:100vh;box-sizing:border-box}.receipt{width:300px;background:#fff;padding:20px;box-shadow:0 4px 6px -1px rgba(0,0,0,.1)}@media print{body{padding:0;background:#fff;display:block;min-height:auto}.receipt{width:100%;padding:0;box-shadow:none;margin:0;max-width:none}}.text-center{text-align:center}.fw-bold{font-weight:bold}.fs-large{font-size:18px}.divider{border-bottom:2px dashed #000;margin:10px 0}.item,.summary-row{display:flex;justify-content:space-between;margin-bottom:4px}.item-name{flex:1;padding-right:10px}.item-qty{width:40px}.item-total{width:90px;text-align:right}
   </style></head><body><div class="receipt">
-    <div class="text-center fw-bold fs-large">${escapeHtml(settings.restaurant_name ?? settings.outlet_name ?? 'Restaurant POS')}</div>
+    <div class="text-center fw-bold fs-large">${escapeHtml(settings.restaurant_name ?? settings.outlet_name ?? 'S Restaurant')}</div>
     ${addressLine ? `<div class="text-center">${escapeHtml(addressLine)}</div>` : ''}
     ${settings.phone ? `<div class="text-center">${escapeHtml(settings.phone)}</div>` : ''}
     <div class="divider"></div>

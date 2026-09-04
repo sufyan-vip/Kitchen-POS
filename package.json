@@ -1,17 +1,27 @@
 {
-  "name": "restaurant-pos",
+  "name": "s-restaurant-pos",
+  "productName": "S Restaurant POS",
   "version": "1.0.0",
   "private": true,
+  "description": "S Restaurant — offline-first restaurant POS (orders, KOT/KDS, billing, inventory, reports) for Windows.",
   "main": "backend/dist/main.js",
   "scripts": {
-    "dev": "concurrently \"npm run dev --prefix frontend\" \"npm run dev --prefix backend\" \"wait-on http://localhost:5205 && electron backend/dist/main.js\"",
-    "build": "npm run build --prefix backend && npm run build --prefix frontend",
-    "package": "npm run build && electron-builder"
+    "postinstall": "electron-builder install-app-deps",
+    "dev": "concurrently \"npm run dev --prefix frontend\" \"npm run dev --prefix backend\" \"wait-on http://localhost:5205 backend/dist/main.js && electron backend/dist/main.js\"",
+    "build": "npm run build --prefix backend && npm run build --prefix frontend && node scripts/build-windows-portable.mjs",
+    "test": "npm test --prefix backend && npm test --prefix frontend",
+    "lint": "npm run lint --prefix backend && npm run lint --prefix frontend",
+    "verify": "npm run lint && npm test && npm run build",
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "package": "npm run build && electron-builder",
+    "package:win": "npm run build && electron-builder --win nsis portable --publish never",
+    "package:dir": "npm run build && electron-builder --dir"
   },
   "dependencies": {
     "archiver": "^6.0.1",
     "better-sqlite3": "^9.4.3",
-    "electron-store": "^8.1.0"
+    "electron-store": "^8.1.0",
+    "extract-zip": "^2.0.1"
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.2",

@@ -161,12 +161,12 @@ export async function createBill(
 
     const info = db.prepare(`
       INSERT INTO bills (
-        bill_number, order_id, taxable_amount, cgst_amount, sgst_amount, discount_amount, total_amount, customer_id, business_date,
+        bill_number, order_id, taxable_amount, cgst_amount, sgst_amount, discount_amount, discount_amount_minor, total_amount, customer_id, business_date,
         currency, taxable_amount_minor, tax_name, tax_rate, tax_mode, tax_amount, tax_amount_minor,
         service_charge_amount, service_charge_minor, delivery_charge_amount, delivery_charge_minor, total_amount_minor
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      billNumber, orderId, legacyTotals.taxable_amount, 0, 0, totalDiscountMinor / 100, totalMinor / 100, customerId ?? null, order.business_date ?? null,
+      billNumber, orderId, legacyTotals.taxable_amount, 0, 0, totalDiscountMinor / 100, totalDiscountMinor, totalMinor / 100, customerId ?? null, order.business_date ?? null,
       currency, subtotalMinor, order.tax_name ?? (settings.tax_enabled ? settings.tax_name : 'Tax'), order.tax_rate, order.tax_mode,
       taxMinor / 100, taxMinor,
       serviceChargeMinor / 100, serviceChargeMinor, order.delivery_charge_minor / 100, order.delivery_charge_minor, totalMinor,

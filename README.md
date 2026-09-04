@@ -1,6 +1,8 @@
-# Kitchen POS Pakistan
+# S Restaurant POS
 
 A modern, offline-first Restaurant POS for Pakistan-focused restaurant workflows, built with Electron, React, TypeScript, and SQLite.
+
+**Windows users:** see [docs/WINDOWS-BUILD.md](docs/WINDOWS-BUILD.md) for how to get the installer (`S-Restaurant-POS-Setup-1.0.0.exe`) and the single-file portable executable, and for first-run instructions.
 
 > This project is a customization of the existing Kitchen-POS architecture. It was not rebuilt from scratch. Legacy Indian GST fields are preserved for historical compatibility, but the active billing flow now uses configurable Pakistan-oriented settings.
 

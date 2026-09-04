@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/auth';
 import { api } from '../../lib/ipc';
 import { useToast } from '../../hooks/useToast';
+import logoUrl from '../../assets/logo.svg';
 
 const LoginPage: React.FC = () => {
   const [pin, setPin] = useState('');
@@ -122,9 +123,18 @@ const LoginPage: React.FC = () => {
   }, [pin, handleDigit, handleBackspace, handleSubmit, isRecovering]);
 
   return (
-    <div className="flex h-screen w-full items-center justify-center bg-gradient-to-br from-indigo-900 via-purple-900 to-cyan-900 animate-gradient-bg">
+    <div className="flex h-screen w-full items-center justify-center bg-gradient-to-br from-emerald-950 via-green-900 to-emerald-800 animate-gradient-bg">
       <div className={`w-80 sm:w-96 p-8 flex flex-col items-center rounded-3xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-2xl animate-fade-in ${error && !isRecovering ? 'animate-shake' : ''}`}>
-        
+
+        <img
+          src={logoUrl}
+          alt="S Restaurant"
+          width={96}
+          height={96}
+          className="w-24 h-24 mb-4 object-contain drop-shadow-lg"
+        />
+        <p className="text-amber-200/80 text-xs tracking-[0.35em] uppercase mb-6">S Restaurant</p>
+
         {isRecovering ? (
           <div className="w-full flex flex-col items-center">
             <h2 className="text-2xl font-bold mb-4 text-white tracking-widest uppercase">Recover PIN</h2>
