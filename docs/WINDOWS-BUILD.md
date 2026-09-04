@@ -20,7 +20,8 @@ a GitHub Actions workflow that does exactly that.
 3. Click **Run workflow**, choose the branch, and confirm.
 4. When the run finishes (roughly 15–25 minutes), open it and download the
    **S-Restaurant-POS-Windows** artifact from the *Artifacts* section.
-5. Unzip it — it contains both executables.
+5. Unzip it. `S-Restaurant-POS-Setup-1.0.0.exe` is at the top level and
+   `S-Restaurant-POS-1.0.0-portable.exe` is in the `portable/` subfolder.
 
 ## Installing
 
