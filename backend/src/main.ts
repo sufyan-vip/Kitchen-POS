@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, Tray, nativeImage, protocol, net, session, shell } from 'electron';
+import { app, BrowserWindow, Menu, Tray, dialog, nativeImage, protocol, net, session, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
@@ -225,9 +225,22 @@ void app.whenReady().then(async () => {
     }
   });
 
-  // Initialize DB and Run migrations before registering IPC
-  getDB();
-  runMigrations();
+  // Initialize DB and run migrations before registering IPC. A failure here
+  // means the app cannot function at all, so it is reported to the user
+  // instead of leaving them with a window whose every action errors.
+  try {
+    getDB();
+    runMigrations();
+  } catch (e) {
+    const detail = e instanceof Error ? `${e.message}\n\n${e.stack ?? ''}` : String(e);
+    console.error('Database initialisation failed:', detail);
+    dialog.showErrorBox(
+      'S Restaurant POS could not start',
+      `The local database could not be prepared.\n\n${detail}`,
+    );
+    app.exit(1);
+    return;
+  }
 
   registerAllIPC();
   startScheduler();

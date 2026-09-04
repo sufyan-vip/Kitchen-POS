@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatCurrency, toMinorUnits } from './money';
+import { formatCurrency, formatCurrencyMinor, toMinorUnits } from './money';
 import { calcBillTotals, calcLineItemTaxMinor, OrderItem, TaxSettings } from './tax';
 import { assertValidPaymentTransition, canTransitionPaymentStatus, EasypaisaProvider, JazzCashProvider } from './payments';
 import { hasPermission } from './authz';
@@ -17,7 +17,10 @@ const baseSettings: TaxSettings = {
 
 describe('Pakistan POS money and tax', () => {
   it('formats PKR without INR symbols', () => {
-    expect(formatCurrency(170000)).toBe('Rs 1,700');
+    expect(formatCurrencyMinor(170000)).toBe('Rs 1,700');
+    // Major units are never re-interpreted as paisa (receipts pass rupees).
+    expect(formatCurrency(1700)).toBe('Rs 1,700');
+    expect(formatCurrency(1700.5)).toBe('Rs 1,700.5');
     expect(formatCurrency('2300.50')).toBe('Rs 2,300.5');
   });
 

@@ -22,11 +22,29 @@ export function fromMinorUnits(minor: number): number {
   return Math.round(minor) / 100;
 }
 
-export function formatCurrency(amount: number | string, currency = DEFAULT_CURRENCY, locale = 'en-PK'): string {
-  const minor = typeof amount === 'number' && Number.isInteger(amount) ? amount : toMinorUnits(amount);
-  const major = fromMinorUnits(minor);
+function formatMajor(major: number, currency: string, locale: string): string {
   if (currency === 'PKR') {
     return `Rs ${major.toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
   }
   return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(major);
+}
+
+/**
+ * Format an integer minor-unit (paisa) amount.
+ * This is the form every stored `*_minor` column uses.
+ */
+export function formatCurrencyMinor(minor: number, currency = DEFAULT_CURRENCY, locale = 'en-PK'): string {
+  return formatMajor(fromMinorUnits(minor), currency, locale);
+}
+
+/**
+ * Format a major-unit (rupee) amount.
+ *
+ * This used to guess: an integer argument was read as *minor* units while a
+ * decimal was read as *major* units. Receipts pass rupee values, so a bill of
+ * Rs 1,700.00 printed as "Rs 17" while Rs 1,700.50 printed correctly. The unit
+ * is now explicit — use formatCurrencyMinor() for paisa.
+ */
+export function formatCurrency(amount: number | string, currency = DEFAULT_CURRENCY, locale = 'en-PK'): string {
+  return formatMajor(fromMinorUnits(toMinorUnits(amount)), currency, locale);
 }
