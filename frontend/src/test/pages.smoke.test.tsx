@@ -114,14 +114,21 @@ describe('page smoke: every screen mounts against the IPC bridge', () => {
       // Let effect-driven IPC loads settle.
       await waitFor(() => { expect(container.firstChild).not.toBeNull(); });
       await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise(resolve => setTimeout(resolve, 0));
 
       consoleError.mockRestore();
 
-      const realErrors = errors.filter(message =>
-        !message.includes('not wrapped in act') &&
-        !message.includes('React Router Future Flag') &&
-        !message.includes('validateDOMNesting'),
-      );
+      // Noise from the test environment, not from the app: jsdom gives every
+      // element a zero bounding box (so Recharts complains about container
+      // size) and React's act() warning fires for IPC promises that resolve
+      // after the assertion.
+      const environmentNoise = [
+        'not wrapped in act',
+        'React Router Future Flag',
+        'validateDOMNesting',
+        'of chart should be greater than 0',
+      ];
+      const realErrors = errors.filter(message => !environmentNoise.some(noise => message.includes(noise)));
       expect(realErrors, `${name} logged errors:\n${realErrors.join('\n')}`).toEqual([]);
     });
   }
