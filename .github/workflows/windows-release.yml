@@ -1,14 +1,52 @@
-name: Build Kitchen POS Windows Installer
+name: Build S Restaurant POS for Windows
+
+# Produces the two Windows deliverables:
+#   dist-electron/S-Restaurant-POS-Setup-<version>.exe      (NSIS installer)
+#   dist-electron/S-Restaurant-POS-<version>-portable.exe   (single-file portable)
+#
+# Both are built by a single electron-builder invocation that passes *both*
+# targets. The previous workflow passed only `nsis`, and an explicit target list
+# on the CLI replaces `win.target` from electron-builder.yml — which is why the
+# portable target configured there was never produced.
+#
+# Native-module note: better-sqlite3 has to be compiled twice for two different
+# ABIs, so the order of the steps below matters.
+#   * backend/node_modules -> compiled for **Node**, because Vitest runs the
+#     backend suite under plain Node. `npm ci` does this on its own.
+#   * root node_modules    -> compiled for **Electron**, because that is the
+#     copy electron-builder packages (electron-builder.yml only includes the
+#     root node_modules). @electron/rebuild does this.
+# Rebuilding the root copy for Electron *before* running the backend tests is
+# what broke the old workflow: the tests then failed to load the module with a
+# NODE_MODULE_VERSION mismatch.
 
 on:
   workflow_dispatch:
+    inputs:
+      run_tests:
+        description: "Run lint, type-check and tests before packaging"
+        type: boolean
+        default: true
+  push:
+    tags:
+      - "v*"
 
 permissions:
   contents: read
 
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ELECTRON_VERSION: "30.5.1"
+  # electron-builder builds both Windows targets in one go, so the portable
+  # helper invoked by `npm run build` must stand down.
+  SKIP_PORTABLE_BUILD: "true"
+
 jobs:
   build-windows:
-    name: Build Kitchen POS Windows Installer
+    name: Build Windows installer + portable exe
     runs-on: windows-2022
     timeout-minutes: 60
 
@@ -21,11 +59,19 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+            frontend/package-lock.json
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      # ── Native toolchain ────────────────────────────────────────────────
+      # better-sqlite3 has no prebuilt binary for Node 22 / Electron 30, so it
+      # is always compiled from source and needs the MSVC C++ toolchain.
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v3
@@ -51,15 +97,13 @@ jobs:
             throw "Visual Studio C++ build tools were not found."
           }
 
-          Write-Host "Visual Studio: $vsPath"
-
           $vcvars = Join-Path $vsPath "VC\Auxiliary\Build\vcvars64.bat"
 
           if (-not (Test-Path $vcvars)) {
             throw "vcvars64.bat was not found at $vcvars"
           }
 
-          "VS_INSTALL_PATH=$vsPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Visual Studio: $vsPath"
           "VCVARS_PATH=$vcvars" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Initialize MSVC environment
@@ -83,39 +127,78 @@ jobs:
 
           Write-Host "MSVC environment initialized."
 
-      - name: Verify MSVC compiler
-        shell: pwsh
-        run: |
-          Write-Host "Checking cl.exe..."
-          where.exe cl.exe
-
-          if ($LASTEXITCODE -ne 0) {
-            throw "cl.exe is not available in PATH."
-          }
-
-          cl.exe 2>&1 | Select-Object -First 5
-
-      - name: Configure npm
+      - name: Configure npm for native builds
         shell: pwsh
         run: |
           npm config set msvs_version 2022
           npm config set python "$env:pythonLocation\python.exe"
 
-          Write-Host "Node:"
-          node --version
+          where.exe cl.exe
 
-          Write-Host "npm:"
-          npm --version
+          Write-Host "Node:    $(node --version)"
+          Write-Host "npm:     $(npm --version)"
+          Write-Host "Python:  $(python --version)"
 
-          Write-Host "Python:"
-          python --version
+      # ── Dependencies ────────────────────────────────────────────────────
+      # Root install skips lifecycle scripts: the `postinstall`
+      # (electron-builder install-app-deps) would rebuild native modules before
+      # the Electron binary is present. The rebuild happens explicitly later.
 
-      - name: Install root dependencies (no lifecycle scripts)
+      - name: Install root dependencies
         shell: pwsh
-        run: |
-          npm ci --ignore-scripts
+        run: npm ci --ignore-scripts
 
-      - name: Download Electron binary manually
+      # Backend installs *with* scripts so better-sqlite3 is compiled for the
+      # Node runtime that Vitest uses.
+      - name: Install backend dependencies
+        shell: pwsh
+        working-directory: backend
+        run: npm ci
+
+      - name: Install frontend dependencies
+        shell: pwsh
+        working-directory: frontend
+        run: npm ci
+
+      - name: Verify backend native module (Node ABI)
+        shell: pwsh
+        working-directory: backend
+        run: |
+          node -e "const db = require('better-sqlite3')(':memory:'); console.log('SQLite', db.prepare('select sqlite_version() v').get().v); db.close();"
+
+      # ── Quality gates ───────────────────────────────────────────────────
+
+      - name: Lint and type-check backend
+        if: ${{ inputs.run_tests != false }}
+        shell: pwsh
+        working-directory: backend
+        run: |
+          npx tsc --noEmit
+          npm run lint
+
+      - name: Run backend tests
+        if: ${{ inputs.run_tests != false }}
+        shell: pwsh
+        working-directory: backend
+        run: npm test
+
+      - name: Lint and type-check frontend
+        if: ${{ inputs.run_tests != false }}
+        shell: pwsh
+        working-directory: frontend
+        run: |
+          npx tsc --noEmit
+          npm run lint
+
+      - name: Run frontend tests
+        if: ${{ inputs.run_tests != false }}
+        shell: pwsh
+        working-directory: frontend
+        run: npm test
+
+      # ── Electron runtime + native module for Electron's ABI ─────────────
+
+      - name: Download the Electron binary
         shell: pwsh
         run: |
           node node_modules/electron/install.js
@@ -124,34 +207,17 @@ jobs:
             throw "Electron binary failed to download."
           }
 
-          Write-Host "Electron binary downloaded successfully."
+          $version = node -p "require('./node_modules/electron/package.json').version"
+          Write-Host "Electron $version ready."
 
-      - name: Verify Electron
-        shell: pwsh
-        run: |
-          Write-Host "Electron package:"
-          node -p "require('./node_modules/electron/package.json').version"
-
-          Write-Host "Electron binary:"
-          if (Test-Path "node_modules/electron/dist/electron.exe") {
-            Write-Host "Electron binary found."
-          }
-          else {
-            throw "Electron binary was not installed."
-          }
-
-      - name: Rebuild better-sqlite3 for Electron (root)
+      - name: Rebuild better-sqlite3 for Electron
         shell: pwsh
         env:
           npm_config_msvs_version: "2022"
           npm_config_python: ${{ env.pythonLocation }}\python.exe
-        run: |
-          where.exe cl.exe
-          cl.exe 2>&1 | Select-Object -First 5
+        run: npx electron-rebuild -f -w better-sqlite3 -v $env:ELECTRON_VERSION
 
-          npx electron-rebuild -f -w better-sqlite3
-
-      - name: Verify better-sqlite3 native module (root)
+      - name: Verify packaged native module
         shell: pwsh
         run: |
           $native = Get-ChildItem `
@@ -161,114 +227,79 @@ jobs:
             -File
 
           if (-not $native) {
-            throw "root better-sqlite3 native module was not produced."
+            throw "better-sqlite3 native module was not produced for Electron."
           }
 
-          Write-Host "Native module found:"
           $native | Select-Object FullName, Length
 
-      - name: Install backend dependencies (no lifecycle scripts)
-        shell: pwsh
-        working-directory: backend
-        run: |
-          npm ci --ignore-scripts
+      # ── Build and package ───────────────────────────────────────────────
 
-      - name: Rebuild backend's better-sqlite3 for Electron
+      - name: Build renderer and main process
+        shell: pwsh
+        run: npm run build
+
+      - name: Verify build output
+        shell: pwsh
+        run: |
+          foreach ($required in @("backend\dist\main.js", "backend\dist\preload.js", "frontend\dist\index.html", "build-resources\icon.ico")) {
+            if (-not (Test-Path $required)) {
+              throw "Missing build output: $required"
+            }
+          }
+
+          Write-Host "Build output complete."
+
+      - name: Build Windows installer and portable executable
         shell: pwsh
         env:
           npm_config_msvs_version: "2022"
           npm_config_python: ${{ env.pythonLocation }}\python.exe
-        working-directory: backend
-        run: |
-          where.exe cl.exe
+        run: npx electron-builder --win nsis portable --publish never
 
-          npx electron-rebuild -f -w better-sqlite3 -v 30.5.1
-
-      - name: Verify backend native module
+      - name: Verify both executables
         shell: pwsh
         run: |
-          $native = Get-ChildItem `
-            -Path "backend\node_modules\better-sqlite3" `
-            -Recurse `
-            -Filter "*.node" `
-            -File
-
-          if (-not $native) {
-            throw "backend's better-sqlite3 native module was not produced."
-          }
-
-          Write-Host "Native module found:"
-          $native | Select-Object FullName, Length
-
-      - name: Run backend tests
-        shell: pwsh
-        working-directory: backend
-        run: |
-          npm test
-
-      - name: Install frontend dependencies
-        shell: pwsh
-        working-directory: frontend
-        run: |
-          npm ci
-
-      - name: Run frontend tests
-        shell: pwsh
-        working-directory: frontend
-        run: |
-          npm test
-
-      - name: Build application
-        shell: pwsh
-        run: |
-          npm run build
-
-      - name: Build Windows NSIS installer
-        shell: pwsh
-        env:
-          npm_config_msvs_version: "2022"
-          npm_config_python: ${{ env.pythonLocation }}\python.exe
-        run: |
-          where.exe cl.exe
-
-          npx electron-builder --win nsis --publish never
-
-      - name: Verify installer
-        shell: pwsh
-        run: |
-          Write-Host "Searching for Windows installer..."
-
           if (-not (Test-Path "dist-electron")) {
             throw "dist-electron directory was not produced."
           }
 
-          Get-ChildItem `
-            -Path "dist-electron" `
-            -Recurse `
-            -File |
-            Select-Object FullName, Length
+          $exes = Get-ChildItem -Path "dist-electron" -Recurse -Filter "*.exe" -File
 
-          $installer = Get-ChildItem `
-            -Path "dist-electron" `
-            -Recurse `
-            -Filter "*.exe" `
-            -File
-
-          if (-not $installer) {
-            throw "ERROR: No Windows .exe installer was produced."
+          if (-not $exes) {
+            throw "No Windows .exe was produced."
           }
 
-          Write-Host ""
-          Write-Host "SUCCESS: Windows installer produced:"
-          $installer | Select-Object FullName, Length
+          $setup = $exes | Where-Object { $_.Name -like "*Setup*" }
+          $portable = $exes | Where-Object { $_.Name -like "*portable*" }
 
-      - name: Upload Windows installer
+          if (-not $setup) { throw "The NSIS Setup installer was not produced." }
+          if (-not $portable) { throw "The portable executable was not produced." }
+
+          Write-Host "Windows executables:"
+          $exes |
+            Select-Object Name, @{ Name = "MB"; Expression = { [math]::Round($_.Length / 1MB, 1) } } |
+            Format-Table -AutoSize |
+            Out-String |
+            Write-Host
+
+      - name: Upload Windows executables
         uses: actions/upload-artifact@v4
         with:
-          name: Kitchen-POS-Windows-Installer
+          name: S-Restaurant-POS-Windows
           path: |
             dist-electron/**/*.exe
             dist-electron/**/*.blockmap
             dist-electron/latest.yml
           if-no-files-found: error
           retention-days: 30
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            **/npm-debug.log*
+            **/*.log
+          if-no-files-found: ignore
+          retention-days: 7
