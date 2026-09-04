@@ -73,59 +73,10 @@ jobs:
       # better-sqlite3 has no prebuilt binary for Node 22 / Electron 30, so it
       # is always compiled from source and needs the MSVC C++ toolchain.
 
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v3
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
         with:
-          msbuild-architecture: x64
-
-      - name: Find Visual Studio
-        shell: pwsh
-        run: |
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-
-          if (-not (Test-Path $vswhere)) {
-            throw "vswhere.exe was not found."
-          }
-
-          $vsPath = & $vswhere `
-            -latest `
-            -products * `
-            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
-            -property installationPath
-
-          if (-not $vsPath) {
-            throw "Visual Studio C++ build tools were not found."
-          }
-
-          $vcvars = Join-Path $vsPath "VC\Auxiliary\Build\vcvars64.bat"
-
-          if (-not (Test-Path $vcvars)) {
-            throw "vcvars64.bat was not found at $vcvars"
-          }
-
-          Write-Host "Visual Studio: $vsPath"
-          "VCVARS_PATH=$vcvars" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Initialize MSVC environment
-        shell: pwsh
-        run: |
-          $envDump = & cmd.exe /c "`"$env:VCVARS_PATH`" && set"
-
-          foreach ($line in $envDump) {
-            if ($line -match '^([^=]+)=(.*)$') {
-              $name = $matches[1]
-              $value = $matches[2]
-
-              if ($name -eq "PATH") {
-                $value | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-              }
-              elseif ($name -notmatch '^(PROMPT|_=)$') {
-                "$name=$value" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-              }
-            }
-          }
-
-          Write-Host "MSVC environment initialized."
+          arch: x64
 
       - name: Configure npm for native builds
         shell: pwsh
