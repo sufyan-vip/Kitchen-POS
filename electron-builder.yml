@@ -1,24 +1,65 @@
-appId: pk.restaurantpos.kitchen
-productName: Kitchen POS Pakistan
+appId: pk.srestaurant.kitchenpos
+productName: S Restaurant POS
+copyright: Copyright © 2026 S Restaurant
+
 directories:
   output: dist-electron
+  buildResources: build-resources
+
 files:
   - backend/dist/**/*
   - frontend/dist/**/*
   - node_modules/**/*
   - package.json
+  - assets/**/*
+
+# Native modules must live outside the asar archive or better-sqlite3 cannot
+# load its .node binary at runtime.
+asarUnpack:
+  - "**/node_modules/better-sqlite3/**"
+
 extraResources:
   - from: backend/src/db/migrations
     to: migrations
+  - from: assets
+    to: assets
+
 win:
-  target: nsis
+  icon: build-resources/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+
 mac:
+  icon: build-resources/icon.png
+  category: public.app-category.business
   target: dmg
+
 linux:
+  icon: build-resources/icon.png
+  category: Office
   target: AppImage
+
 nsis:
+  artifactName: "S-Restaurant-POS-Setup-${version}.${ext}"
   oneClick: false
+  perMachine: false
+  allowElevation: true
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
+  shortcutName: S Restaurant POS
+  installerIcon: build-resources/icon.ico
+  uninstallerIcon: build-resources/icon.ico
+  installerHeaderIcon: build-resources/icon.ico
+  deleteAppDataOnUninstall: false
+  runAfterFinish: true
+
+portable:
+  artifactName: "S-Restaurant-POS-${version}-portable.${ext}"
+
 publish: null

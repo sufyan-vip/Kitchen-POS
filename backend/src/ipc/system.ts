@@ -38,7 +38,7 @@ function errMsg(e: unknown): string {
 
 function setAdminPin(db: ReturnType<typeof getDB>, pin: string): void {
   const salt = generateSalt();
-  db.prepare('UPDATE staff SET name = name, pin_hash = ?, pin_salt = ?, pin = NULL WHERE role = "admin"')
+  db.prepare('UPDATE staff SET pin_hash = ?, pin_salt = ?, pin = NULL WHERE role = \'admin\'')
     .run(hashPin(pin, salt), salt);
 }
 
@@ -52,17 +52,30 @@ export function registerSystemIPC() {
     }
   });
 
-  ipcMain.handle('system:completeSetup', async (_, payload: { restaurantName: string; adminName: unknown; adminPin: unknown }) => {
+  ipcMain.handle('system:completeSetup', async (_, payload: { restaurantName: unknown; adminName: unknown; adminPin: unknown }) => {
     try {
+      const store = getSettingsStore();
+      // First-run only. Without this guard the channel could be replayed at any
+      // time to silently overwrite the admin PIN — a full authentication bypass.
+      if (store.get('is_setup_complete', false) === true) {
+        throw new Error('Setup has already been completed. Use Settings to change the restaurant name, or the recovery code to reset the admin PIN.');
+      }
+
       const db = getDB();
       const adminPin = asText(payload.adminPin);
       if (adminPin.length < 4 || adminPin.length > 10) { throw new Error('Admin PIN must be 4-10 characters'); }
-      const salt = generateSalt();
-      db.prepare('UPDATE staff SET name = ?, pin_hash = ?, pin_salt = ?, pin = NULL WHERE role = "admin"')
-        .run(asText(payload.adminName).trim() || 'Admin', hashPin(adminPin, salt), salt);
+      const restaurantName = asText(payload.restaurantName).trim();
+      if (!restaurantName) { throw new Error('Restaurant name is required'); }
 
-      const store = getSettingsStore();
-      store.set('outlet_name', payload.restaurantName);
+      const salt = generateSalt();
+      const info = db.prepare('UPDATE staff SET name = ?, pin_hash = ?, pin_salt = ?, pin = NULL WHERE role = \'admin\'')
+        .run(asText(payload.adminName).trim() || 'Admin', hashPin(adminPin, salt), salt);
+      if (info.changes === 0) { throw new Error('No admin account exists to configure'); }
+
+      // Both keys are written: `restaurant_name` is what receipts, reports and
+      // the Settings screen read; `outlet_name` is the legacy alias.
+      store.set('restaurant_name', restaurantName);
+      store.set('outlet_name', restaurantName);
       store.set('is_setup_complete', true);
 
       return { success: true };

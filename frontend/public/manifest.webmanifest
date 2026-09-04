@@ -1,13 +1,13 @@
 {
-  "short_name": "Vital",
-  "name": "Vital - Modern React Boilerplate Template",
-  "description": "A modern React boilerplate template with React 19, TypeScript, Tailwind CSS 4, and all the tools you need to build amazing applications.",
+  "short_name": "S Restaurant",
+  "name": "S Restaurant — Kitchen POS",
+  "description": "Offline-first restaurant point-of-sale for S Restaurant: orders, KOT/KDS, billing, inventory and reports.",
   "icons": [
     {
-      "src": "favicon.svg",
+      "src": "logo.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "icon-192.png",
@@ -17,14 +17,14 @@
     {
       "src": "icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ],
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
-  "theme_color": "#2563eb",
-  "background_color": "#ffffff",
-  "orientation": "portrait-primary",
-  "categories": ["productivity", "utilities"],
+  "theme_color": "#0d6340",
+  "background_color": "#07452b",
+  "categories": ["business", "productivity"],
   "lang": "en"
 }
