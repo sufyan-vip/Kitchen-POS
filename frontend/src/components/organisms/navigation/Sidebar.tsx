@@ -1,4 +1,5 @@
 import { Button } from '../../../components/atoms';
+import logoUrl from '../../../assets/logo.svg';
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { SvgIcon } from '../../../components/atoms/svg-sprite-loader';
@@ -88,7 +89,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Logo icon — always visible */}
         <img
-          src="/logo-128.png"
+          src={logoUrl}
           alt="S Restaurant"
           width={40}
           height={40}

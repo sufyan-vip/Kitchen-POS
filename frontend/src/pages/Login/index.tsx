@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/auth';
 import { api } from '../../lib/ipc';
 import { useToast } from '../../hooks/useToast';
+import logoUrl from '../../assets/logo.svg';
 
 const LoginPage: React.FC = () => {
   const [pin, setPin] = useState('');
@@ -126,7 +127,7 @@ const LoginPage: React.FC = () => {
       <div className={`w-80 sm:w-96 p-8 flex flex-col items-center rounded-3xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-2xl animate-fade-in ${error && !isRecovering ? 'animate-shake' : ''}`}>
 
         <img
-          src="/logo-256.png"
+          src={logoUrl}
           alt="S Restaurant"
           width={96}
           height={96}

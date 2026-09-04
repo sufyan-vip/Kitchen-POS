@@ -5,9 +5,10 @@ import { api } from '../../lib/ipc';
 import { useToast } from '../../hooks/useToast';
 import { Input } from '../../components/atoms';
 import Button from '../../components/atoms/button/button';
+import logoUrl from '../../assets/logo.svg';
 
 const SetupPage: React.FC = () => {
-  const [restaurantName, setRestaurantName] = useState('');
+  const [restaurantName, setRestaurantName] = useState('S Restaurant');
   const [adminName, setAdminName] = useState('Admin');
   const [adminPin, setAdminPin] = useState('');
   const [loading, setLoading] = useState(false);
@@ -53,8 +54,9 @@ const SetupPage: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <div className="max-w-md w-full bg-white p-8 rounded-xl shadow-xl border border-gray-100">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome to Kitchen POS</h1>
-          <p className="text-sm text-gray-500">Let's get your restaurant set up.</p>
+          <img src={logoUrl} alt="S Restaurant" width={80} height={80} className="w-20 h-20 mx-auto mb-4 object-contain" />
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome to S Restaurant POS</h1>
+          <p className="text-sm text-gray-500">Let&apos;s get your restaurant set up.</p>
         </div>
 
         <form onSubmit={(e) => { void handleSetup(e); }} className="space-y-5">
